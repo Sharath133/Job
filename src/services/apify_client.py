@@ -111,7 +111,7 @@ class ApifyJobClient:
 
     def fetch_latest_jobs(self, max_jobs: int) -> list[JobRecord]:
         run_input = {
-            "datePosted": "past_24h",
+            "datePosted": "past_hour",
             "easyApplyOnly": True,
             "jobTypes": ["full_time"],
             "locations": [
