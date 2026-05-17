@@ -1,0 +1,27 @@
+# Virtual environment
+.venv/
+venv/
+env/
+
+# Environment and secrets
+.env
+credentials.json
+service_account.json
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Local debug and runtime artifacts
+debug_apify_dataset.json
+debug/
+manual_review/
+session_cookies.json
+
+# OS
+.DS_Store
+Thumbs.db
