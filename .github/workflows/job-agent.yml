@@ -37,13 +37,13 @@ jobs:
           APIFY_ACTOR_ID: ${{ secrets.APIFY_ACTOR_ID }}
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
           GROQ_MODEL: llama-3.1-8b-instant
-          APOLLO_API_KEY: ${{ secrets.APOLLO_API_KEY }}
+          HUNTER_API_KEY: ${{ secrets.HUNTER_API_KEY }}
           GMAIL_SENDER_EMAIL: ${{ secrets.GMAIL_SENDER_EMAIL }}
           GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
           GOOGLE_SHEET_ID: ${{ secrets.GOOGLE_SHEET_ID }}
           GOOGLE_SERVICE_ACCOUNT_FILE: service_account.json
           GOOGLE_WORKSHEET_NAME: applied_jobs
-          RESUME_PATH: ./resume.pdf
+          RESUME_PATH: ./Resume_Sharath_SDE.pdf
           SESSION_COOKIES_PATH: ./session_cookies.json
           MANUAL_REVIEW_DIR: ./manual_review
           PLAYWRIGHT_USER_AGENT: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36

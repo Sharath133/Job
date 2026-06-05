@@ -7,7 +7,7 @@ Python 3.11 state-machine pipeline that discovers jobs, filters duplicates, scor
 1. Ingests latest jobs from Apify.
 2. Deduplicates by `job_id` using Google Sheets.
 3. Scores role fit via Groq (`llama-3.1-8b-instant`).
-4. Enriches recruiter leads using Apollo.
+4. Enriches recruiter leads using Hunter.
 5. Drafts and sends personalized email via SMTP.
 6. Submits applications via Playwright for Lever/Greenhouse.
 7. Skips Workday and stores screenshot for manual review.
@@ -17,7 +17,7 @@ Python 3.11 state-machine pipeline that discovers jobs, filters duplicates, scor
 
 - Score gate: proceed only when `score > 8`.
 - Email safety: max 25 sent emails/day (sheet-derived count).
-- Apollo safety: max 3 recruiter searches/run.
+- Hunter safety: max 3 recruiter searches/run.
 - Anti-bot: random 5-15 second jitter between major form actions.
 - Hallucination control:
   - Skip empty job descriptions.
@@ -44,7 +44,7 @@ Minimum required:
 - `APIFY_TOKEN`
 - `APIFY_ACTOR_ID`
 - `GROQ_API_KEY`
-- `APOLLO_API_KEY`
+- `HUNTER_API_KEY`
 - `GMAIL_SENDER_EMAIL`
 - `GMAIL_APP_PASSWORD`
 - `GOOGLE_SHEET_ID`
@@ -76,7 +76,7 @@ Configure these repository secrets:
 - `APIFY_TOKEN`
 - `APIFY_ACTOR_ID`
 - `GROQ_API_KEY`
-- `APOLLO_API_KEY`
+- `HUNTER_API_KEY`
 - `GMAIL_SENDER_EMAIL`
 - `GMAIL_APP_PASSWORD`
 - `GOOGLE_SHEET_ID`
@@ -85,5 +85,5 @@ Configure these repository secrets:
 ## Notes
 
 - Keep `RUN_MODE=live` only when you are ready for real sends/submissions.
-- Store `resume.pdf` at repository root or update `RESUME_PATH`.
+- Store `Resume_Sharath_SDE.pdf` at repository root or update `RESUME_PATH`.
 - Workday jobs are intentionally flagged for manual follow-up in `manual_review/`.
