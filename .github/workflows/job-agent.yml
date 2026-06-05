@@ -22,6 +22,11 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
+      - name: Show installed Apify versions
+        run: |
+          python -m pip show apify-client apify-shared
+          python -c "from apify_client import ApifyClient; print('Apify import OK')"
+
       - name: Install Playwright Chromium
         run: python -m playwright install chromium
 
