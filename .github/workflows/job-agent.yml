@@ -31,8 +31,34 @@ jobs:
         run: python -m playwright install chromium
 
       - name: Write Google service account file
+        env:
+          GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
         run: |
-          echo '${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}' > service_account.json
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          raw = os.environ.get("GOOGLE_SERVICE_ACCOUNT_JSON", "").strip()
+          if not raw:
+              raise SystemExit("GOOGLE_SERVICE_ACCOUNT_JSON repository secret is empty or missing.")
+
+          try:
+              data = json.loads(raw)
+          except json.JSONDecodeError as exc:
+              raise SystemExit(f"GOOGLE_SERVICE_ACCOUNT_JSON is not valid JSON: {exc}") from exc
+
+          required_keys = {"client_email", "private_key", "token_uri"}
+          missing = sorted(required_keys - data.keys())
+          if missing:
+              raise SystemExit(
+                  "GOOGLE_SERVICE_ACCOUNT_JSON is missing required key(s): "
+                  + ", ".join(missing)
+              )
+
+          Path("service_account.json").write_text(json.dumps(data), encoding="utf-8")
+          print("Google service account JSON validated.")
+          PY
 
       - name: Run autonomous job agent
         env:

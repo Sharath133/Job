@@ -56,13 +56,25 @@ class SheetsService:
         values = self._sheet.row_values(1)
         if values != SHEET_COLUMNS:
             self._sheet.update(f"A1:{_column_letter(len(SHEET_COLUMNS))}1", [SHEET_COLUMNS])
+        if len(values) > len(SHEET_COLUMNS):
+            first_extra = _column_letter(len(SHEET_COLUMNS) + 1)
+            last_extra = _column_letter(len(values))
+            self._sheet.batch_clear([f"{first_extra}1:{last_extra}1"])
+
+    def _get_records(self) -> list[dict[str, object]]:
+        values = self._sheet.get(f"A2:{_column_letter(len(SHEET_COLUMNS))}")
+        records: list[dict[str, object]] = []
+        for row in values:
+            padded_row = [*row, *[""] * (len(SHEET_COLUMNS) - len(row))]
+            records.append(dict(zip(SHEET_COLUMNS, padded_row[: len(SHEET_COLUMNS)])))
+        return records
 
     def get_existing_job_ids(self) -> set[str]:
-        records = self._sheet.get_all_records()
+        records = self._get_records()
         return {str(row.get("job_id", "")).strip() for row in records if row.get("job_id")}
 
     def count_emails_sent_today(self) -> int:
-        records = self._sheet.get_all_records()
+        records = self._get_records()
         today = datetime.now(timezone.utc).date()
         count = 0
         for row in records:
