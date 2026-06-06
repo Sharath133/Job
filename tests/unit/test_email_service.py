@@ -16,7 +16,7 @@ def test_send_email_rejects_invalid_draft() -> None:
         service.send_email("r@example.com", EmailDraft(subject="", body="", is_valid=False, validation_error="bad"))
 
 
-def test_send_email_builds_multipart_html(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_send_email_builds_multipart_html_with_attachment(monkeypatch: pytest.MonkeyPatch, tmp_path) -> None:
     captured: dict = {}
 
     class FakeSMTP:
@@ -45,8 +45,11 @@ def test_send_email_builds_multipart_html(monkeypatch: pytest.MonkeyPatch) -> No
         body="Hi **Jane**,\n\nInterested in **Python**.",
         is_valid=True,
     )
+    resume_path = tmp_path / "resume.pdf"
+    resume_path.write_bytes(b"%PDF-1.4\n")
+
     EmailService("smtp.gmail.com", 587, "sender@test.com", "pw", daily_limit=25).send_email(
-        "recruiter@test.com", draft
+        "recruiter@test.com", draft, str(resume_path)
     )
 
     message = captured["message"]
@@ -55,13 +58,18 @@ def test_send_email_builds_multipart_html(monkeypatch: pytest.MonkeyPatch) -> No
 
     plain_part = ""
     html_part = ""
+    attachment_part = None
     for part in message.walk():
         if part.get_content_type() == "text/plain":
             plain_part = part.get_content()
         elif part.get_content_type() == "text/html":
             html_part = part.get_content()
+        elif part.get_filename() == "resume.pdf":
+            attachment_part = part
 
     assert "**" not in plain_part
     assert "Jane" in plain_part
     assert "<strong>Jane</strong>" in html_part
     assert "<strong>Python</strong>" in html_part
+    assert attachment_part is not None
+    assert attachment_part.get_content_type() == "application/pdf"

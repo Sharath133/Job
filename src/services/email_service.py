@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import smtplib
 from email.message import EmailMessage
+from pathlib import Path
 
 from src.models import EmailDraft
 from src.utils.email_html_utils import markdown_bold_to_html, strip_markdown_bold
@@ -27,7 +28,7 @@ class EmailService:
     def can_send(self, already_sent_today: int) -> bool:
         return already_sent_today < self._daily_limit
 
-    def send_email(self, recipient_email: str, draft: EmailDraft) -> None:
+    def send_email(self, recipient_email: str, draft: EmailDraft, attachment_path: str | None = None) -> None:
         if not draft.is_valid:
             raise ValueError(f"Invalid email draft: {draft.validation_error}")
 
@@ -37,8 +38,23 @@ class EmailService:
         message["Subject"] = strip_markdown_bold(draft.subject)
         message.set_content(strip_markdown_bold(draft.body))
         message.add_alternative(markdown_bold_to_html(draft.body), subtype="html")
+        if attachment_path:
+            self._attach_file(message, attachment_path)
 
         with smtplib.SMTP(self._smtp_host, self._smtp_port, timeout=30) as smtp:
             smtp.starttls()
             smtp.login(self._sender_email, self._app_password)
             smtp.send_message(message)
+
+    @staticmethod
+    def _attach_file(message: EmailMessage, attachment_path: str) -> None:
+        path = Path(attachment_path)
+        if not path.is_file():
+            raise FileNotFoundError(f"Email attachment not found: {attachment_path}")
+
+        message.add_attachment(
+            path.read_bytes(),
+            maintype="application",
+            subtype="pdf",
+            filename=path.name,
+        )

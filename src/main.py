@@ -226,7 +226,7 @@ class JobAgentOrchestrator:
             return
 
         try:
-            self._email.send_email(context.recruiter.email, context.email_draft)
+            self._email.send_email(context.recruiter.email, context.email_draft, settings.resume_path)
             context.outcome.email_status = "sent"
         except Exception as exc:  # noqa: BLE001
             context.outcome.email_status = "failed"
