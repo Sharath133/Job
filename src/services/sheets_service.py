@@ -91,4 +91,9 @@ class SheetsService:
         return count
 
     def append_result(self, context: JobExecutionContext) -> None:
-        self._sheet.append_row(context.to_sheet_row(), value_input_option="RAW")
+        next_row = len(self._sheet.col_values(1)) + 1
+        self._sheet.update(
+            f"A{next_row}:{_column_letter(len(SHEET_COLUMNS))}{next_row}",
+            [context.to_sheet_row()],
+            value_input_option="RAW",
+        )

@@ -3,7 +3,7 @@ from __future__ import annotations
 import uuid
 
 from src.config import settings
-from src.models import ExecutionOutcome, JobExecutionContext, JobState
+from src.models import ExecutionOutcome, JobExecutionContext, JobRecord, JobState
 from src.services.apify_client import ApifyJobClient
 from src.services.company_domain_service import CompanyDomainService
 from src.services.google_search_service import GoogleSearchService
@@ -88,6 +88,25 @@ class JobAgentOrchestrator:
     def run(self) -> None:
         self._logger.info("Starting job agent run_id=%s mode=%s", self._run_id, settings.run_mode)
         jobs = self._apify.fetch_latest_jobs(settings.max_jobs)
+        if not jobs:
+            self._logger.info("No jobs returned by Apify for run_id=%s", self._run_id)
+            self._sheets.append_result(
+                JobExecutionContext(
+                    job=JobRecord(
+                        job_id=f"NO_JOBS_{self._run_id}",
+                        title="No jobs returned by Apify",
+                        company="",
+                        description="",
+                        job_url="",
+                        application_url="",
+                    ),
+                    state=JobState.FINALIZED,
+                    outcome=ExecutionOutcome(failure_reason="No jobs returned by Apify"),
+                    run_id=self._run_id,
+                )
+            )
+            return
+
         existing_ids = self._sheets.get_existing_job_ids()
         emails_sent_today = self._sheets.count_emails_sent_today()
 
