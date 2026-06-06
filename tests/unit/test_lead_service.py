@@ -52,7 +52,7 @@ def test_lead_service_uses_hunter_when_email_found(logger: logging.Logger) -> No
         name="Should Not Run", email="skip@acme.com"
     )
 
-    lead = LeadService(hunter, snov, None, logger).find_recruiter_for_company("Acme")
+    lead = LeadService(hunter, snov, None, None, logger).find_recruiter_for_company("Acme")
     assert lead.email == "jane@acme.com"
 
 
@@ -74,7 +74,7 @@ def test_lead_service_google_then_hunter_email_finder(logger: logging.Logger) ->
     )
     hunter.find_recruiter_for_company = lambda company: RecruiterLead()  # type: ignore[method-assign]
 
-    lead = LeadService(hunter, None, google, logger).find_recruiter_for_job(_job())
+    lead = LeadService(hunter, None, google, None, logger).find_recruiter_for_job(_job())
     assert lead.email == "jane@acme.com"
 
 
@@ -110,6 +110,7 @@ def test_lead_service_falls_back_to_snov_on_hunter_failure(
         SnovService(
             client_id="id", client_secret="secret", max_searches_per_run=3, domain_resolver=resolver
         ),
+        None,
         None,
         logger,
     ).find_recruiter_for_company("Acme Corp")
@@ -149,6 +150,23 @@ def test_lead_service_falls_back_when_hunter_returns_empty(
             client_id="id", client_secret="secret", max_searches_per_run=3, domain_resolver=resolver
         ),
         None,
+        None,
         logger,
     ).find_recruiter_for_company("Acme Corp")
     assert lead.email == "hr@acme.com"
+
+
+def test_lead_service_uses_public_contact_before_hunter(logger: logging.Logger) -> None:
+    class PublicContacts:
+        def find_recruiter_for_job(self, company_name: str, job_description: str) -> RecruiterLead:
+            return RecruiterLead(email="careers@acme.com", title="Public contact", lead_source="public_contact")
+
+    hunter = HunterService(api_key="x", max_searches_per_run=3, domain_resolver=FakeDomainResolver())
+    hunter.find_recruiter_for_company = lambda company: (_ for _ in ()).throw(  # type: ignore[method-assign]
+        AssertionError("Hunter should not run when public contact found")
+    )
+
+    lead = LeadService(hunter, None, None, PublicContacts(), logger).find_recruiter_for_job(_job())
+
+    assert lead.email == "careers@acme.com"
+    assert lead.lead_source == "public_contact"

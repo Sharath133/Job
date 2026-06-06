@@ -37,6 +37,8 @@ class Settings(BaseSettings):
     snov_client_secret: str = Field(default="", alias="SNOV_CLIENT_SECRET")
     google_cse_api_key: str = Field(default="", alias="GOOGLE_CSE_API_KEY")
     google_cse_cx: str = Field(default="", alias="GOOGLE_CSE_CX")
+    public_contact_enabled: bool = Field(default=True, alias="PUBLIC_CONTACT_ENABLED")
+    public_contact_max_pages: int = Field(default=5, alias="PUBLIC_CONTACT_MAX_PAGES")
 
     gmail_smtp_host: str = Field(default="smtp.gmail.com", alias="GMAIL_SMTP_HOST")
     gmail_smtp_port: int = Field(default=587, alias="GMAIL_SMTP_PORT")

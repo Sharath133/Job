@@ -5,15 +5,17 @@ import logging
 from src.models import JobRecord, RecruiterLead
 from src.services.google_search_service import GoogleSearchService
 from src.services.hunter_service import HunterService
+from src.services.public_contact_service import PublicContactService
 from src.services.snov_service import SnovService
 
 
 class LeadService:
     """
     Recruiter sourcing workflow:
-    1. Google LinkedIn recruiter search -> Hunter email finder (by name)
-    2. Hunter domain search (HR department)
-    3. Snov.io fallback
+    1. Public job/company pages
+    2. Google LinkedIn recruiter search -> Hunter email finder (by name)
+    3. Hunter domain search (HR department)
+    4. Snov.io fallback
     """
 
     def __init__(
@@ -21,15 +23,21 @@ class LeadService:
         hunter: HunterService,
         snov: SnovService | None,
         google_search: GoogleSearchService | None,
+        public_contacts: PublicContactService | None,
         logger: logging.Logger,
     ) -> None:
         self._hunter = hunter
         self._snov = snov
         self._google_search = google_search
+        self._public_contacts = public_contacts
         self._logger = logger
 
     def find_recruiter_for_job(self, job: JobRecord) -> RecruiterLead:
         company_name = job.company_info.name or job.company
+
+        lead = self._try_public_contacts(company_name, job.description)
+        if lead.email:
+            return lead
 
         lead = self._try_google_and_hunter_email_finder(company_name)
         if lead.email:
@@ -40,6 +48,18 @@ class LeadService:
             return lead
 
         return self._try_snov_fallback(company_name, lead)
+
+    def _try_public_contacts(self, company_name: str, job_description: str) -> RecruiterLead:
+        if not self._public_contacts:
+            return RecruiterLead()
+        try:
+            lead = self._public_contacts.find_recruiter_for_job(company_name, job_description)
+        except Exception as exc:  # noqa: BLE001
+            self._logger.warning("Public contact search failed for %s: %s", company_name, exc)
+            return RecruiterLead()
+        if lead.email:
+            self._logger.info("Found recruiter via public contact search for %s: %s", company_name, lead.email)
+        return lead
 
     def find_recruiter_for_company(self, company_name: str) -> RecruiterLead:
         """Backward-compatible entry point."""

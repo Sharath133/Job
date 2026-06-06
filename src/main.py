@@ -16,6 +16,7 @@ from src.services.snov_service import SnovService
 from src.services.email_service import EmailService
 from src.services.groq_service import GroqService
 from src.services.playwright_service import PlaywrightApplyService
+from src.services.public_contact_service import PublicContactService
 from src.services.session_store import SessionStore
 from src.services.sheets_service import SheetsService
 from src.state_machine import StateMachine
@@ -74,6 +75,11 @@ class JobAgentOrchestrator:
             if settings.google_search_enabled
             else None
         )
+        public_contacts = (
+            PublicContactService(domain_resolver, settings.public_contact_max_pages)
+            if settings.public_contact_enabled
+            else None
+        )
         self._lead = LeadService(
             HunterService(
                 settings.hunter_api_key,
@@ -82,6 +88,7 @@ class JobAgentOrchestrator:
             ),
             snov,
             google_search,
+            public_contacts,
             self._logger,
         )
         self._sheets = SheetsService(
