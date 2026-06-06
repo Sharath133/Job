@@ -110,6 +110,7 @@ class ApifyJobClient:
         self._actor_id = actor_id
 
     def fetch_latest_jobs(self, max_jobs: int) -> list[JobRecord]:
+        result_limit = max(1, max_jobs)
         run_input = {
             "datePosted": "past_24h",
             "easyApplyOnly": True,
@@ -120,7 +121,7 @@ class ApifyJobClient:
                 "Hyderabad, Telangana, India",
                 "Pune, Maharashtra, India",
             ],
-            "maxResults": 30,
+            "maxResults": result_limit,
             "mode": "search",
             "searchKeywords": (
                 "Software Developer OR Backend Developer OR Full Stack "
@@ -134,7 +135,7 @@ class ApifyJobClient:
             "jobUrls": [],
         }
 
-        run = self._client.actor(self._actor_id).call(run_input=run_input)
+        run = self._client.actor(self._actor_id).call(run_input=run_input, max_items=result_limit)
         dataset_id = run.get("defaultDatasetId")
         if not dataset_id:
             return []

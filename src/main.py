@@ -87,7 +87,27 @@ class JobAgentOrchestrator:
 
     def run(self) -> None:
         self._logger.info("Starting job agent run_id=%s mode=%s", self._run_id, settings.run_mode)
-        jobs = self._apify.fetch_latest_jobs(settings.max_jobs)
+        try:
+            jobs = self._apify.fetch_latest_jobs(settings.max_jobs)
+        except Exception as exc:  # noqa: BLE001
+            self._logger.exception("Apify fetch failed for run_id=%s", self._run_id)
+            self._sheets.append_result(
+                JobExecutionContext(
+                    job=JobRecord(
+                        job_id=f"APIFY_FETCH_FAILED_{self._run_id}",
+                        title="Apify fetch failed",
+                        company="",
+                        description="",
+                        job_url="",
+                        application_url="",
+                    ),
+                    state=JobState.FINALIZED,
+                    outcome=ExecutionOutcome(failure_reason=f"Apify fetch failed: {exc}"),
+                    run_id=self._run_id,
+                )
+            )
+            return
+
         if not jobs:
             self._logger.info("No jobs returned by Apify for run_id=%s", self._run_id)
             self._sheets.append_result(
