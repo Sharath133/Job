@@ -13,14 +13,14 @@ class LeadService:
     """
     Recruiter sourcing workflow:
     1. Public job/company pages
-    2. Google LinkedIn recruiter search -> Hunter email finder (by name)
-    3. Hunter domain search (HR department)
-    4. Snov.io fallback
+    2. Snov.io domain search
+    3. Google LinkedIn recruiter search -> Hunter email finder (by name)
+    4. Hunter domain search (HR department)
     """
 
     def __init__(
         self,
-        hunter: HunterService,
+        hunter: HunterService | None,
         snov: SnovService | None,
         google_search: GoogleSearchService | None,
         public_contacts: PublicContactService | None,
@@ -39,15 +39,15 @@ class LeadService:
         if lead.email:
             return lead
 
+        lead = self._try_snov_search(company_name)
+        if lead.email:
+            return lead
+
         lead = self._try_google_and_hunter_email_finder(company_name)
         if lead.email:
             return lead
 
-        lead = self._try_hunter_domain_search(company_name)
-        if lead.email:
-            return lead
-
-        return self._try_snov_fallback(company_name, lead)
+        return self._try_hunter_domain_search(company_name)
 
     def _try_public_contacts(self, company_name: str, job_description: str) -> RecruiterLead:
         if not self._public_contacts:
@@ -75,7 +75,7 @@ class LeadService:
         )
 
     def _try_google_and_hunter_email_finder(self, company_name: str) -> RecruiterLead:
-        if not self._google_search:
+        if not self._google_search or not self._hunter:
             return RecruiterLead()
 
         try:
@@ -115,6 +115,8 @@ class LeadService:
         return RecruiterLead()
 
     def _try_hunter_domain_search(self, company_name: str) -> RecruiterLead:
+        if not self._hunter:
+            return RecruiterLead()
         try:
             lead = self._hunter.find_recruiter_for_company(company_name)
             return self._tag_hunter_lead(lead, "hunter_domain")
@@ -122,19 +124,18 @@ class LeadService:
             self._logger.warning("Hunter domain search failed for %s: %s", company_name, exc)
             return RecruiterLead()
 
-    def _try_snov_fallback(self, company_name: str, hunter_lead: RecruiterLead) -> RecruiterLead:
+    def _try_snov_search(self, company_name: str) -> RecruiterLead:
         if not self._snov:
-            return hunter_lead
+            return RecruiterLead()
         try:
             snov_lead = self._snov.find_recruiter_for_company(company_name)
             if snov_lead.email:
                 snov_lead.lead_source = "snov"
-                snov_lead.hunter_email = hunter_lead.hunter_email
-                self._logger.info("Snov fallback found recruiter for %s", company_name)
+                self._logger.info("Snov found recruiter for %s", company_name)
                 return snov_lead
         except Exception as exc:  # noqa: BLE001
-            self._logger.warning("Snov fallback failed for %s: %s", company_name, exc)
-        return hunter_lead
+            self._logger.warning("Snov search failed for %s: %s", company_name, exc)
+        return RecruiterLead()
 
     @staticmethod
     def _tag_hunter_lead(lead: RecruiterLead, source: str) -> RecruiterLead:

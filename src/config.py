@@ -34,7 +34,7 @@ class Settings(BaseSettings):
     groq_model: str = Field(default="llama-3.1-8b-instant", alias="GROQ_MODEL")
     groq_request_delay_seconds: float = Field(default=20.0, alias="GROQ_REQUEST_DELAY_SECONDS")
 
-    hunter_api_key: str = Field(alias="HUNTER_API_KEY")
+    hunter_api_key: str = Field(default="", alias="HUNTER_API_KEY")
     snov_client_id: str = Field(default="", alias="SNOV_CLIENT_ID")
     snov_client_secret: str = Field(default="", alias="SNOV_CLIENT_SECRET")
     google_cse_api_key: str = Field(default="", alias="GOOGLE_CSE_API_KEY")
@@ -78,6 +78,10 @@ class Settings(BaseSettings):
     @property
     def google_search_enabled(self) -> bool:
         return bool(self.google_cse_api_key.strip() and self.google_cse_cx.strip())
+
+    @property
+    def hunter_enabled(self) -> bool:
+        return bool(self.hunter_api_key.strip())
 
     def validate_runtime_paths(self) -> None:
         """Ensure expected runtime folders exist."""

@@ -38,7 +38,7 @@ def _job(company: str = "Acme Corp") -> JobRecord:
     )
 
 
-def test_lead_service_uses_hunter_when_email_found(logger: logging.Logger) -> None:
+def test_lead_service_uses_snov_before_hunter(logger: logging.Logger) -> None:
     resolver = FakeDomainResolver()
     hunter = HunterService(api_key="x", max_searches_per_run=3, domain_resolver=resolver)
     snov = SnovService(
@@ -46,14 +46,15 @@ def test_lead_service_uses_hunter_when_email_found(logger: logging.Logger) -> No
     )
 
     hunter.find_recruiter_for_company = lambda company: RecruiterLead(  # type: ignore[method-assign]
-        name="Jane", email="jane@acme.com", title="Recruiter"
+        name="Should Not Run", email="hunter@acme.com", title="Recruiter"
     )
     snov.find_recruiter_for_company = lambda company: RecruiterLead(  # type: ignore[method-assign]
-        name="Should Not Run", email="skip@acme.com"
+        name="Jane", email="jane@acme.com", title="Recruiter"
     )
 
     lead = LeadService(hunter, snov, None, None, logger).find_recruiter_for_company("Acme")
     assert lead.email == "jane@acme.com"
+    assert lead.lead_source == "snov"
 
 
 def test_lead_service_google_then_hunter_email_finder(logger: logging.Logger) -> None:
@@ -78,14 +79,9 @@ def test_lead_service_google_then_hunter_email_finder(logger: logging.Logger) ->
     assert lead.email == "jane@acme.com"
 
 
-def test_lead_service_falls_back_to_snov_on_hunter_failure(
+def test_lead_service_uses_snov_without_hunter(
     monkeypatch: pytest.MonkeyPatch, logger: logging.Logger
 ) -> None:
-    monkeypatch.setattr(
-        "src.services.hunter_service.requests.get",
-        lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("hunter down")),
-    )
-
     def fake_snov_post(url: str, data: dict | None = None, timeout: int = 30) -> DummyResponse:
         if url.endswith("access_token"):
             return DummyResponse({"access_token": "token"})
@@ -106,7 +102,7 @@ def test_lead_service_falls_back_to_snov_on_hunter_failure(
 
     resolver = FakeDomainResolver()
     lead = LeadService(
-        HunterService(api_key="x", max_searches_per_run=3, domain_resolver=resolver),
+        None,
         SnovService(
             client_id="id", client_secret="secret", max_searches_per_run=3, domain_resolver=resolver
         ),
@@ -115,31 +111,34 @@ def test_lead_service_falls_back_to_snov_on_hunter_failure(
         logger,
     ).find_recruiter_for_company("Acme Corp")
     assert lead.email == "recruiter@acme.com"
+    assert lead.lead_source == "snov"
 
 
-def test_lead_service_falls_back_when_hunter_returns_empty(
+def test_lead_service_falls_back_to_hunter_when_snov_returns_empty(
     monkeypatch: pytest.MonkeyPatch, logger: logging.Logger
 ) -> None:
     monkeypatch.setattr(
         "src.services.hunter_service.requests.get",
-        lambda *args, **kwargs: DummyResponse({"data": {"emails": []}}),
+        lambda *args, **kwargs: DummyResponse(
+            {
+                "data": {
+                    "emails": [
+                        {
+                            "value": "hr@acme.com",
+                            "first_name": "Pat",
+                            "last_name": "HR",
+                            "position": "HR Manager",
+                        }
+                    ]
+                }
+            }
+        ),
     )
 
     def fake_snov_post(url: str, data: dict | None = None, timeout: int = 30) -> DummyResponse:
         if url.endswith("access_token"):
             return DummyResponse({"access_token": "token"})
-        return DummyResponse(
-            {
-                "data": [
-                    {
-                        "email": "hr@acme.com",
-                        "firstName": "Pat",
-                        "lastName": "HR",
-                        "position": "HR Manager",
-                    }
-                ]
-            }
-        )
+        return DummyResponse({"data": []})
 
     monkeypatch.setattr("src.services.snov_service.requests.post", fake_snov_post)
 
@@ -154,6 +153,7 @@ def test_lead_service_falls_back_when_hunter_returns_empty(
         logger,
     ).find_recruiter_for_company("Acme Corp")
     assert lead.email == "hr@acme.com"
+    assert lead.lead_source == "hunter_domain"
 
 
 def test_lead_service_uses_public_contact_before_hunter(logger: logging.Logger) -> None:

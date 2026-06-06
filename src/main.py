@@ -81,12 +81,17 @@ class JobAgentOrchestrator:
             if settings.public_contact_enabled
             else None
         )
-        self._lead = LeadService(
+        hunter = (
             HunterService(
                 settings.hunter_api_key,
                 settings.hunter_search_limit_per_run,
                 domain_resolver,
-            ),
+            )
+            if settings.hunter_enabled
+            else None
+        )
+        self._lead = LeadService(
+            hunter,
             snov,
             google_search,
             public_contacts,
