@@ -70,6 +70,16 @@ copy .env.example .env
 python -m src.main
 ```
 
+## Gmail API refresh token
+
+Automatic follow-ups need a Gmail OAuth refresh token. Download an OAuth Desktop client JSON from Google Cloud, then run:
+
+```powershell
+python scripts/generate_gmail_refresh_token.py .\oauth-client.json
+```
+
+Add the printed `GMAIL_API_REFRESH_TOKEN` to GitHub Actions secrets and local `.env`. Do not commit OAuth secrets.
+
 ## GitHub Actions secrets
 
 Configure these repository secrets:
