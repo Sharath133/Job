@@ -1,4 +1,5 @@
 from src.models import EmailDraft, ExecutionOutcome, JobExecutionContext, JobRecord
+from src.main import JobAgentOrchestrator
 
 
 class FakeEmail:
@@ -51,3 +52,52 @@ def test_execution_outcome_collects_independent_failures() -> None:
     assert context.outcome.portal_status == "failed"
     assert "SMTP failure" in context.outcome.failure_reason
     assert "Playwright failure" in context.outcome.failure_reason
+
+
+class FailingSource:
+    def fetch_latest_jobs(self, max_jobs: int) -> list[JobRecord]:
+        raise RuntimeError("source down")
+
+
+class WorkingSource:
+    def fetch_latest_jobs(self, max_jobs: int) -> list[JobRecord]:
+        return [
+            JobRecord(
+                job_id="job-1",
+                title="Python Developer",
+                company="Acme",
+                description="Build Python services",
+                job_url="https://example.com/job-1",
+                application_url="https://example.com/job-1",
+            )
+        ]
+
+
+class FakeSheets:
+    def __init__(self) -> None:
+        self.rows: list[JobExecutionContext] = []
+
+    def append_result(self, context: JobExecutionContext) -> None:
+        self.rows.append(context)
+
+
+class FakeLogger:
+    def info(self, *args, **kwargs) -> None:
+        pass
+
+    def exception(self, *args, **kwargs) -> None:
+        pass
+
+
+def test_fetch_jobs_continues_when_one_source_fails() -> None:
+    orchestrator = JobAgentOrchestrator.__new__(JobAgentOrchestrator)
+    orchestrator._run_id = "run-id"
+    orchestrator._logger = FakeLogger()
+    orchestrator._sheets = FakeSheets()
+    orchestrator._apify = FailingSource()
+    orchestrator._jobspy = WorkingSource()
+
+    jobs = orchestrator._fetch_jobs_from_sources()
+
+    assert [job.job_id for job in jobs] == ["job-1"]
+    assert orchestrator._sheets.rows[0].job.job_id == "APIFY_FETCH_FAILED_run-id"

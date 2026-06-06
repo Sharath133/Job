@@ -4,7 +4,7 @@ Python 3.11 state-machine pipeline that discovers jobs, filters duplicates, scor
 
 ## What it does
 
-1. Ingests latest jobs from Apify.
+1. Ingests latest jobs from Apify and JobSpy.
 2. Deduplicates by `job_id` using Google Sheets.
 3. Scores role fit via Groq (`llama-3.1-8b-instant`).
 4. Enriches recruiter leads using Hunter.
@@ -43,6 +43,7 @@ Minimum required:
 
 - `APIFY_TOKEN`
 - `APIFY_ACTOR_ID`
+- JobSpy runs without a token by default.
 - `GROQ_API_KEY`
 - `HUNTER_API_KEY`
 - `GMAIL_SENDER_EMAIL`
@@ -75,6 +76,7 @@ Configure these repository secrets:
 
 - `APIFY_TOKEN`
 - `APIFY_ACTOR_ID`
+- JobSpy settings are configured directly in `.github/workflows/job-agent.yml`.
 - `GROQ_API_KEY`
 - `HUNTER_API_KEY`
 - `GMAIL_SENDER_EMAIL`

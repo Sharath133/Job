@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor, as_completed
 import uuid
 
 from src.config import settings
@@ -8,6 +9,7 @@ from src.services.apify_client import ApifyJobClient
 from src.services.company_domain_service import CompanyDomainService
 from src.services.google_search_service import GoogleSearchService
 from src.services.hunter_service import HunterService
+from src.services.jobspy_client import JobSpyClient
 from src.services.lead_service import LeadService
 from src.services.snov_service import SnovService
 from src.services.email_service import EmailService
@@ -35,6 +37,17 @@ class JobAgentOrchestrator:
         self._run_id = str(uuid.uuid4())
 
         self._apify = ApifyJobClient(settings.apify_token, settings.apify_actor_id)
+        self._jobspy = (
+            JobSpyClient(
+                settings.jobspy_sites,
+                settings.jobspy_search_term,
+                settings.jobspy_location,
+                settings.jobspy_hours_old,
+                settings.jobspy_fetch_description,
+            )
+            if settings.jobspy_enabled
+            else None
+        )
         self._groq = GroqService(settings.groq_api_key, settings.groq_model)
         domain_resolver = CompanyDomainService()
         snov = (
@@ -87,41 +100,22 @@ class JobAgentOrchestrator:
 
     def run(self) -> None:
         self._logger.info("Starting job agent run_id=%s mode=%s", self._run_id, settings.run_mode)
-        try:
-            jobs = self._apify.fetch_latest_jobs(settings.max_jobs)
-        except Exception as exc:  # noqa: BLE001
-            self._logger.exception("Apify fetch failed for run_id=%s", self._run_id)
-            self._sheets.append_result(
-                JobExecutionContext(
-                    job=JobRecord(
-                        job_id=f"APIFY_FETCH_FAILED_{self._run_id}",
-                        title="Apify fetch failed",
-                        company="",
-                        description="",
-                        job_url="",
-                        application_url="",
-                    ),
-                    state=JobState.FINALIZED,
-                    outcome=ExecutionOutcome(failure_reason=f"Apify fetch failed: {exc}"),
-                    run_id=self._run_id,
-                )
-            )
-            return
+        jobs = self._fetch_jobs_from_sources()
 
         if not jobs:
-            self._logger.info("No jobs returned by Apify for run_id=%s", self._run_id)
+            self._logger.info("No jobs returned by any source for run_id=%s", self._run_id)
             self._sheets.append_result(
                 JobExecutionContext(
                     job=JobRecord(
                         job_id=f"NO_JOBS_{self._run_id}",
-                        title="No jobs returned by Apify",
+                        title="No jobs returned by any source",
                         company="",
                         description="",
                         job_url="",
                         application_url="",
                     ),
                     state=JobState.FINALIZED,
-                    outcome=ExecutionOutcome(failure_reason="No jobs returned by Apify"),
+                    outcome=ExecutionOutcome(failure_reason="No jobs returned by any source"),
                     run_id=self._run_id,
                 )
             )
@@ -139,6 +133,52 @@ class JobAgentOrchestrator:
                 context.state = JobState.FINALIZED
             finally:
                 self._sheets.append_result(context)
+
+    def _fetch_jobs_from_sources(self) -> list[JobRecord]:
+        fetchers = {"apify": self._apify.fetch_latest_jobs}
+        if self._jobspy:
+            fetchers["jobspy"] = self._jobspy.fetch_latest_jobs
+
+        jobs_by_key: dict[str, JobRecord] = {}
+        with ThreadPoolExecutor(max_workers=len(fetchers)) as executor:
+            futures = {
+                executor.submit(fetcher, settings.max_jobs): source
+                for source, fetcher in fetchers.items()
+            }
+            for future in as_completed(futures):
+                source = futures[future]
+                try:
+                    source_jobs = future.result()
+                except Exception as exc:  # noqa: BLE001
+                    self._logger.exception("%s fetch failed for run_id=%s", source, self._run_id)
+                    self._append_source_failure(source, exc)
+                    continue
+
+                self._logger.info("%s returned %s job(s)", source, len(source_jobs))
+                for job in source_jobs:
+                    key = (job.job_url or job.job_id).strip()
+                    if key and key not in jobs_by_key:
+                        jobs_by_key[key] = job
+
+        return list(jobs_by_key.values())[: settings.max_jobs]
+
+    def _append_source_failure(self, source: str, exc: Exception) -> None:
+        source_label = source.upper()
+        self._sheets.append_result(
+            JobExecutionContext(
+                job=JobRecord(
+                    job_id=f"{source_label}_FETCH_FAILED_{self._run_id}",
+                    title=f"{source_label} fetch failed",
+                    company="",
+                    description="",
+                    job_url="",
+                    application_url="",
+                ),
+                state=JobState.FINALIZED,
+                outcome=ExecutionOutcome(failure_reason=f"{source_label} fetch failed: {exc}"),
+                run_id=self._run_id,
+            )
+        )
 
     def _process_single_job(self, context: JobExecutionContext, existing_ids: set[str], emails_sent_today: int) -> None:
         if context.job.job_id in existing_ids:

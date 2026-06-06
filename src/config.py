@@ -21,6 +21,13 @@ class Settings(BaseSettings):
     apify_token: str = Field(alias="APIFY_TOKEN")
     apify_actor_id: str = Field(alias="APIFY_ACTOR_ID")
 
+    jobspy_enabled: bool = Field(default=True, alias="JOBSPY_ENABLED")
+    jobspy_sites: str = Field(default="linkedin", alias="JOBSPY_SITES")
+    jobspy_search_term: str = Field(default="python developer", alias="JOBSPY_SEARCH_TERM")
+    jobspy_location: str = Field(default="India", alias="JOBSPY_LOCATION")
+    jobspy_hours_old: int = Field(default=24, alias="JOBSPY_HOURS_OLD")
+    jobspy_fetch_description: bool = Field(default=True, alias="JOBSPY_FETCH_DESCRIPTION")
+
     groq_api_key: str = Field(alias="GROQ_API_KEY")
     groq_model: str = Field(default="llama-3.1-8b-instant", alias="GROQ_MODEL")
 
