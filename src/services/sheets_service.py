@@ -72,6 +72,27 @@ class SheetsService:
         records = self._get_records()
         return {str(row.get("job_id", "")).strip() for row in records if row.get("job_id")}
 
+    def get_recent_sent_recipients(self, days: int = 14) -> set[str]:
+        records = self._get_records()
+        now = datetime.now(timezone.utc)
+        recipients: set[str] = set()
+        for row in records:
+            if str(row.get("email_status", "")) != "sent":
+                continue
+            email = str(row.get("recruiter_email", "")).strip().lower()
+            timestamp = str(row.get("timestamp", ""))
+            if not email or not timestamp:
+                continue
+            try:
+                sent_at = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
+                if sent_at.tzinfo is None:
+                    sent_at = sent_at.replace(tzinfo=timezone.utc)
+            except ValueError:
+                continue
+            if (now - sent_at).days <= days:
+                recipients.add(email)
+        return recipients
+
     def count_emails_sent_today(self) -> int:
         records = self._get_records()
         today = datetime.now(timezone.utc).date()

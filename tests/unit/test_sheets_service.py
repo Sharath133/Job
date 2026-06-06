@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from src.services import sheets_service
 from src.services.sheets_service import SHEET_COLUMNS, SheetsService, _column_letter
@@ -63,13 +63,15 @@ def test_sheets_service_reads_known_columns_when_header_has_duplicate_extra(monk
     today_row[SHEET_COLUMNS.index("job_id")] = "job-1"
     today_row[SHEET_COLUMNS.index("job_title")] = "Backend Engineer"
     today_row[SHEET_COLUMNS.index("company")] = "Acme"
+    today_row[SHEET_COLUMNS.index("recruiter_email")] = "Recruiter@Example.com"
     today_row[SHEET_COLUMNS.index("email_status")] = "sent"
 
     old_row = [""] * len(SHEET_COLUMNS)
-    old_row[SHEET_COLUMNS.index("timestamp")] = "2020-01-01T00:00:00+00:00"
+    old_row[SHEET_COLUMNS.index("timestamp")] = (datetime.now(timezone.utc) - timedelta(days=30)).isoformat()
     old_row[SHEET_COLUMNS.index("job_id")] = "job-2"
     old_row[SHEET_COLUMNS.index("job_title")] = "Old Job"
     old_row[SHEET_COLUMNS.index("company")] = "Acme"
+    old_row[SHEET_COLUMNS.index("recruiter_email")] = "old@example.com"
     old_row[SHEET_COLUMNS.index("email_status")] = "sent"
 
     worksheet = FakeWorksheet(
@@ -89,6 +91,7 @@ def test_sheets_service_reads_known_columns_when_header_has_duplicate_extra(monk
     assert worksheet.cleared_ranges == [f"{first_extra}1:{first_extra}1"]
     assert service.get_existing_job_ids() == {"job-1", "job-2"}
     assert service.count_emails_sent_today() == 1
+    assert service.get_recent_sent_recipients() == {"recruiter@example.com"}
 
 
 def test_append_result_updates_first_empty_schema_row(monkeypatch) -> None:

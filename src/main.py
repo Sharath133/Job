@@ -135,6 +135,7 @@ class JobAgentOrchestrator:
 
         existing_ids = self._sheets.get_existing_job_ids()
         emails_sent_today = self._sheets.count_emails_sent_today()
+        recent_sent_recipients = self._sheets.get_recent_sent_recipients()
 
         groq_rate_limited = False
         for job in jobs:
@@ -146,7 +147,7 @@ class JobAgentOrchestrator:
                 continue
 
             try:
-                self._process_single_job(context, existing_ids, emails_sent_today)
+                self._process_single_job(context, existing_ids, emails_sent_today, recent_sent_recipients)
             except GroqRateLimitError as exc:
                 context.outcome.failure_reason = f"Groq rate limited: {exc}"
                 context.state = JobState.FINALIZED
@@ -203,7 +204,13 @@ class JobAgentOrchestrator:
             )
         )
 
-    def _process_single_job(self, context: JobExecutionContext, existing_ids: set[str], emails_sent_today: int) -> None:
+    def _process_single_job(
+        self,
+        context: JobExecutionContext,
+        existing_ids: set[str],
+        emails_sent_today: int,
+        recent_sent_recipients: set[str],
+    ) -> None:
         if context.job.job_id in existing_ids:
             context.outcome.failure_reason = "Duplicate job_id"
             context.state = JobState.FINALIZED
@@ -231,15 +238,25 @@ class JobAgentOrchestrator:
         context.email_draft = self._groq.generate_email_draft(context.job, RESUME_SUMMARY, recruiter_name)
         StateMachine.transition(context, JobState.DRAFTED)
 
-        self._execute_email_step(context, emails_sent_today)
+        self._execute_email_step(context, emails_sent_today, recent_sent_recipients)
         self._execute_portal_step(context)
 
         StateMachine.transition(context, JobState.EXECUTED)
         StateMachine.transition(context, JobState.FINALIZED)
 
-    def _execute_email_step(self, context: JobExecutionContext, emails_sent_today: int) -> None:
+    def _execute_email_step(
+        self,
+        context: JobExecutionContext,
+        emails_sent_today: int,
+        recent_sent_recipients: set[str],
+    ) -> None:
         if not context.recruiter.email or not Validators.is_valid_recruiter_email(context.recruiter.email):
             context.outcome.email_status = "skipped_invalid_recruiter_email"
+            return
+        recipient = context.recruiter.email.strip().lower()
+        if recipient in recent_sent_recipients:
+            context.outcome.email_status = "skipped_recently_sent_to_recruiter"
+            context.outcome.failure_reason = f"Recently sent to recruiter: {recipient}"
             return
         if not context.email_draft or not context.email_draft.is_valid:
             context.outcome.email_status = "skipped_invalid_email_draft"
@@ -251,6 +268,7 @@ class JobAgentOrchestrator:
         try:
             self._email.send_email(context.recruiter.email, context.email_draft, settings.resume_path)
             context.outcome.email_status = "sent"
+            recent_sent_recipients.add(recipient)
         except Exception as exc:  # noqa: BLE001
             context.outcome.email_status = "failed"
             context.outcome.failure_reason = f"SMTP failure: {exc}"
