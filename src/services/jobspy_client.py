@@ -40,6 +40,11 @@ def _site_names(raw_sites: str) -> list[str]:
     return sites or ["linkedin"]
 
 
+def _csv_values(raw_value: str, default: str) -> list[str]:
+    values = [value.strip() for value in raw_value.split(",") if value.strip()]
+    return values or [default]
+
+
 def parse_jobspy_row(row: dict[str, Any]) -> JobRecord:
     job_url = _as_str(row.get("job_url_direct") or row.get("job_url"))
     company_url = _as_str(row.get("company_url_direct") or row.get("company_url"))
@@ -76,22 +81,38 @@ class JobSpyClient:
         fetch_description: bool,
     ) -> None:
         self._sites = _site_names(sites)
-        self._search_term = search_term
-        self._location = location
+        self._search_terms = _csv_values(search_term, "python developer")
+        self._locations = _csv_values(location, "India")
         self._hours_old = hours_old
         self._fetch_description = fetch_description
 
     def fetch_latest_jobs(self, max_jobs: int) -> list[JobRecord]:
         result_limit = max(1, max_jobs)
-        rows = scrape_jobs(
-            site_name=self._sites,
-            search_term=self._search_term,
-            google_search_term=f"{self._search_term} jobs near {self._location} since yesterday",
-            location=self._location,
-            results_wanted=result_limit,
-            hours_old=self._hours_old,
-            country_indeed="India",
-            linkedin_fetch_description=self._fetch_description,
-            verbose=0,
-        )
-        return [parse_jobspy_row(row) for row in rows.to_dict(orient="records")]
+        jobs_by_key: dict[str, JobRecord] = {}
+
+        for search_term in self._search_terms:
+            for location in self._locations:
+                remaining = result_limit - len(jobs_by_key)
+                if remaining <= 0:
+                    return list(jobs_by_key.values())
+
+                rows = scrape_jobs(
+                    site_name=self._sites,
+                    search_term=search_term,
+                    google_search_term=f"{search_term} jobs near {location} since yesterday",
+                    location=location,
+                    results_wanted=remaining,
+                    hours_old=self._hours_old,
+                    country_indeed="India",
+                    linkedin_fetch_description=self._fetch_description,
+                    verbose=0,
+                )
+                for row in rows.to_dict(orient="records"):
+                    job = parse_jobspy_row(row)
+                    key = (job.job_url or job.job_id).strip()
+                    if key and key not in jobs_by_key:
+                        jobs_by_key[key] = job
+                    if len(jobs_by_key) >= result_limit:
+                        return list(jobs_by_key.values())
+
+        return list(jobs_by_key.values())

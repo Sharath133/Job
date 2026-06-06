@@ -68,8 +68,8 @@ jobs:
           APIFY_ACTOR_ID: ${{ secrets.APIFY_ACTOR_ID }}
           JOBSPY_ENABLED: true
           JOBSPY_SITES: linkedin
-          JOBSPY_SEARCH_TERM: python developer
-          JOBSPY_LOCATION: India
+          JOBSPY_SEARCH_TERM: software engineer,backend engineer,python developer
+          JOBSPY_LOCATION: India,Bangalore,Hyderabad,Pune,Chennai,Noida,Gurgaon,Remote
           JOBSPY_HOURS_OLD: 24
           JOBSPY_FETCH_DESCRIPTION: true
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
