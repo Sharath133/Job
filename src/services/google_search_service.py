@@ -35,8 +35,6 @@ class GoogleSearchService:
             },
             timeout=30,
         )
-        breakpoint()
-        print(response.json())
         response.raise_for_status()
         return self._parse_candidates(response.json(), max_results)
 

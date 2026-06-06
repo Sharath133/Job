@@ -57,7 +57,7 @@ Worksheet name default: `applied_jobs`.
 
 Expected columns:
 
-`timestamp, job_id, job_title, company, job_url, application_url, score, score_reason, recruiter_name, recruiter_email, email_subject, email_status, portal_status, portal_type, overall_status, failure_reason, screenshot_path, run_id`
+`timestamp, job_id, job_title, company, job_url, application_url, score, recruiter_name, recruiter_email, email_subject, email_status, portal_status, portal_type, overall_status, failure_reason, screenshot_path, run_id`
 
 ## Local setup
 

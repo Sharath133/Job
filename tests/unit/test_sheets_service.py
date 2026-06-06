@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 
 from src.services import sheets_service
-from src.services.sheets_service import SHEET_COLUMNS, SheetsService
+from src.services.sheets_service import SHEET_COLUMNS, SheetsService, _column_letter
 from src.models import JobExecutionContext, JobRecord
 
 
@@ -31,7 +31,7 @@ class FakeWorksheet:
         self.cleared_ranges.extend(ranges)
 
     def get(self, range_name: str) -> list[list[str]]:
-        assert range_name == "A2:X"
+        assert range_name == f"A2:{_column_letter(len(SHEET_COLUMNS))}"
         return self.rows
 
     def append_row(self, row: list[str], value_input_option: str) -> None:
@@ -58,12 +58,23 @@ class FakeClient:
 
 def test_sheets_service_reads_known_columns_when_header_has_duplicate_extra(monkeypatch) -> None:
     today = datetime.now(timezone.utc).isoformat()
+    today_row = [""] * len(SHEET_COLUMNS)
+    today_row[SHEET_COLUMNS.index("timestamp")] = today
+    today_row[SHEET_COLUMNS.index("job_id")] = "job-1"
+    today_row[SHEET_COLUMNS.index("job_title")] = "Backend Engineer"
+    today_row[SHEET_COLUMNS.index("company")] = "Acme"
+    today_row[SHEET_COLUMNS.index("email_status")] = "sent"
+
+    old_row = [""] * len(SHEET_COLUMNS)
+    old_row[SHEET_COLUMNS.index("timestamp")] = "2020-01-01T00:00:00+00:00"
+    old_row[SHEET_COLUMNS.index("job_id")] = "job-2"
+    old_row[SHEET_COLUMNS.index("job_title")] = "Old Job"
+    old_row[SHEET_COLUMNS.index("company")] = "Acme"
+    old_row[SHEET_COLUMNS.index("email_status")] = "sent"
+
     worksheet = FakeWorksheet(
         header=[*SHEET_COLUMNS, "job_id"],
-        rows=[
-            [today, "job-1", "Backend Engineer", "Acme", *[""] * 13, "sent"],
-            ["2020-01-01T00:00:00+00:00", "job-2", "Old Job", "Acme", *[""] * 13, "sent"],
-        ],
+        rows=[today_row, old_row],
     )
 
     monkeypatch.setattr(
@@ -74,7 +85,8 @@ def test_sheets_service_reads_known_columns_when_header_has_duplicate_extra(monk
 
     service = SheetsService("service_account.json", "sheet-id", "applied_jobs")
 
-    assert worksheet.cleared_ranges == ["Y1:Y1"]
+    first_extra = _column_letter(len(SHEET_COLUMNS) + 1)
+    assert worksheet.cleared_ranges == [f"{first_extra}1:{first_extra}1"]
     assert service.get_existing_job_ids() == {"job-1", "job-2"}
     assert service.count_emails_sent_today() == 1
 
@@ -105,5 +117,5 @@ def test_append_result_updates_first_empty_schema_row(monkeypatch) -> None:
 
     service.append_result(context)
 
-    assert worksheet.updates[-1][0] == "A3:X3"
+    assert worksheet.updates[-1][0] == f"A3:{_column_letter(len(SHEET_COLUMNS))}3"
     assert worksheet.updates[-1][1][0][1] == "new-job"

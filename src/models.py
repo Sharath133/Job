@@ -69,7 +69,6 @@ class JobExecutionContext:
     job: JobRecord
     state: JobState = JobState.INGESTED
     score: int = 0
-    score_reason: str = ""
     recruiter: RecruiterLead = field(default_factory=RecruiterLead)
     email_draft: EmailDraft | None = None
     outcome: ExecutionOutcome = field(default_factory=ExecutionOutcome)
@@ -90,7 +89,6 @@ class JobExecutionContext:
             self.job.job_url,
             self.job.application_url,
             str(self.score),
-            self.score_reason,
             self.recruiter.name,
             self.recruiter.title,
             self.recruiter.email,

@@ -192,9 +192,8 @@ class JobAgentOrchestrator:
             context.state = JobState.FINALIZED
             return
 
-        score, reason = self._groq.score_job(context.job, RESUME_SUMMARY)
+        score = self._groq.score_job(context.job, RESUME_SUMMARY)
         context.score = score
-        context.score_reason = reason
         StateMachine.transition(context, JobState.SCORED)
 
         if score <= settings.score_threshold:

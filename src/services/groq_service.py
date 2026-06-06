@@ -17,10 +17,10 @@ class GroqService:
         self._api_key = api_key
         self._model = model
 
-    def score_job(self, job: JobRecord, resume_summary: str) -> tuple[int, str]:
+    def score_job(self, job: JobRecord, resume_summary: str) -> int:
         prompt = (
             "You are a strict technical job-match evaluator.\n"
-            "Return ONLY JSON with keys: score (integer 1-10), reason (string).\n"
+            "Return ONLY JSON with one key: score (integer 1-10).\n"
             f"Candidate Summary:\n{resume_summary}\n\n"
             f"Job Title: {job.title}\n"
             f"Company: {job.company}\n"
@@ -30,10 +30,9 @@ class GroqService:
         try:
             parsed = json.loads(raw_content)
             score = int(parsed.get("score", 0))
-            reason = str(parsed.get("reason", ""))
         except Exception as exc:  # noqa: BLE001
             raise ValueError(f"Invalid scoring JSON from Groq: {raw_content}") from exc
-        return score, reason
+        return score
 
     def generate_email_draft(self, job: JobRecord, resume_summary: str, recruiter_name: str) -> EmailDraft:
         prompt = f"""You are writing a job application email on behalf of Sharath, a backend engineer.

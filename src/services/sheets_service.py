@@ -27,7 +27,6 @@ SHEET_COLUMNS = [
     "job_url",
     "application_url",
     "score",
-    "score_reason",
     "recruiter_name",
     "recruiter_title",
     "recruiter_email",
