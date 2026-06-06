@@ -74,6 +74,7 @@ jobs:
           JOBSPY_FETCH_DESCRIPTION: true
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
           GROQ_MODEL: llama-3.1-8b-instant
+          GROQ_REQUEST_DELAY_SECONDS: 30
           HUNTER_API_KEY: ${{ secrets.HUNTER_API_KEY }}
           GMAIL_SENDER_EMAIL: ${{ secrets.GMAIL_SENDER_EMAIL }}
           GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}

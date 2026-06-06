@@ -30,6 +30,7 @@ class Settings(BaseSettings):
 
     groq_api_key: str = Field(alias="GROQ_API_KEY")
     groq_model: str = Field(default="llama-3.1-8b-instant", alias="GROQ_MODEL")
+    groq_request_delay_seconds: float = Field(default=20.0, alias="GROQ_REQUEST_DELAY_SECONDS")
 
     hunter_api_key: str = Field(alias="HUNTER_API_KEY")
     snov_client_id: str = Field(default="", alias="SNOV_CLIENT_ID")

@@ -49,7 +49,11 @@ class JobAgentOrchestrator:
             if settings.jobspy_enabled
             else None
         )
-        self._groq = GroqService(settings.groq_api_key, settings.groq_model)
+        self._groq = GroqService(
+            settings.groq_api_key,
+            settings.groq_model,
+            settings.groq_request_delay_seconds,
+        )
         domain_resolver = CompanyDomainService()
         snov = (
             SnovService(

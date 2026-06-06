@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import re
+import time
 from dataclasses import dataclass
 
 import requests
@@ -26,9 +27,11 @@ class GroqService:
 
     _url = "https://api.groq.com/openai/v1/chat/completions"
 
-    def __init__(self, api_key: str, model: str) -> None:
+    def __init__(self, api_key: str, model: str, request_delay_seconds: float = 0.0) -> None:
         self._api_key = api_key
         self._model = model
+        self._request_delay_seconds = max(0.0, request_delay_seconds)
+        self._last_request_at: float | None = None
 
     def score_job(self, job: JobRecord, resume_summary: str) -> int:
         prompt = (
@@ -121,6 +124,7 @@ class GroqService:
         return Validators.parse_subject_and_body(raw_content)
         
     def _call_chat_completion(self, prompt: str) -> str:
+        self._wait_for_request_slot()
         payload = {
             "model": self._model,
             "messages": [
@@ -144,6 +148,16 @@ class GroqService:
         response.raise_for_status()
         body = response.json()
         return body["choices"][0]["message"]["content"].strip()
+
+    def _wait_for_request_slot(self) -> None:
+        now = time.monotonic()
+        if self._last_request_at is not None:
+            elapsed = now - self._last_request_at
+            remaining = self._request_delay_seconds - elapsed
+            if remaining > 0:
+                time.sleep(remaining)
+                now = time.monotonic()
+        self._last_request_at = now
 
 
 def _retry_after_seconds(response: requests.Response) -> float | None:
