@@ -143,6 +143,11 @@ class NoopSheets(FakeSheets):
         return set()
 
 
+class ExistingJobSheets(NoopSheets):
+    def get_existing_job_ids(self) -> set[str]:
+        return {"job-1"}
+
+
 def test_run_stops_groq_calls_after_rate_limit() -> None:
     orchestrator = JobAgentOrchestrator.__new__(JobAgentOrchestrator)
     orchestrator._run_id = "run-id"
@@ -187,7 +192,11 @@ class DuplicateRecruiterJobSource:
 
 
 class SuccessfulGroq:
+    def __init__(self) -> None:
+        self.scored_job_ids: list[str] = []
+
     def score_job(self, job: JobRecord, resume_summary: str) -> int:
+        self.scored_job_ids.append(job.job_id)
         return 100
 
     def generate_email_draft(self, job: JobRecord, resume_summary: str, recruiter_name: str) -> EmailDraft:
@@ -234,3 +243,22 @@ def test_run_skips_duplicate_recruiter_email_in_same_run() -> None:
         "skipped_recently_sent_to_recruiter",
     ]
     assert "recruiter@example.com" in orchestrator._sheets.rows[1].outcome.failure_reason
+
+
+def test_run_filters_existing_jobs_before_processing() -> None:
+    orchestrator = JobAgentOrchestrator.__new__(JobAgentOrchestrator)
+    orchestrator._run_id = "run-id"
+    orchestrator._logger = FakeLogger()
+    orchestrator._sheets = ExistingJobSheets()
+    orchestrator._apify = DuplicateRecruiterJobSource()
+    orchestrator._jobspy = None
+    orchestrator._groq = SuccessfulGroq()
+    orchestrator._lead = SameRecruiterLead()
+    orchestrator._email = RecordingEmail()
+    orchestrator._playwright = NoopPlaywright()
+
+    orchestrator.run()
+
+    assert orchestrator._groq.scored_job_ids == ["job-2"]
+    assert [row.job.job_id for row in orchestrator._sheets.rows] == ["job-2"]
+    assert orchestrator._email.recipients == ["Recruiter@Example.com"]

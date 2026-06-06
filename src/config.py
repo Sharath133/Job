@@ -27,6 +27,8 @@ class Settings(BaseSettings):
     jobspy_location: str = Field(default="India", alias="JOBSPY_LOCATION")
     jobspy_hours_old: int = Field(default=24, alias="JOBSPY_HOURS_OLD")
     jobspy_fetch_description: bool = Field(default=True, alias="JOBSPY_FETCH_DESCRIPTION")
+    jobspy_results_per_search: int = Field(default=25, alias="JOBSPY_RESULTS_PER_SEARCH")
+    jobspy_max_fetched_jobs: int = Field(default=200, alias="JOBSPY_MAX_FETCHED_JOBS")
 
     groq_api_key: str = Field(alias="GROQ_API_KEY")
     groq_model: str = Field(default="llama-3.1-8b-instant", alias="GROQ_MODEL")

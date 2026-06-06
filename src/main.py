@@ -46,6 +46,7 @@ class JobAgentOrchestrator:
                 settings.jobspy_location,
                 settings.jobspy_hours_old,
                 settings.jobspy_fetch_description,
+                settings.jobspy_results_per_search,
             )
             if settings.jobspy_enabled
             else None
@@ -113,6 +114,7 @@ class JobAgentOrchestrator:
     def run(self) -> None:
         self._logger.info("Starting job agent run_id=%s mode=%s", self._run_id, settings.run_mode)
         jobs = self._fetch_jobs_from_sources()
+        existing_ids = self._sheets.get_existing_job_ids()
 
         if not jobs:
             self._logger.info("No jobs returned by any source for run_id=%s", self._run_id)
@@ -133,12 +135,40 @@ class JobAgentOrchestrator:
             )
             return
 
-        existing_ids = self._sheets.get_existing_job_ids()
+        new_jobs = [job for job in jobs if job.job_id not in existing_ids]
+        jobs_to_process = new_jobs[: settings.max_jobs]
+        skipped_existing = len(jobs) - len(new_jobs)
+        self._logger.info(
+            "Fetched %s job(s), skipped %s already processed job(s), processing %s new job(s)",
+            len(jobs),
+            skipped_existing,
+            len(jobs_to_process),
+        )
+        if not jobs_to_process:
+            self._sheets.append_result(
+                JobExecutionContext(
+                    job=JobRecord(
+                        job_id=f"NO_NEW_JOBS_{self._run_id}",
+                        title="No new jobs after dedupe",
+                        company="",
+                        description="",
+                        job_url="",
+                        application_url="",
+                    ),
+                    state=JobState.FINALIZED,
+                    outcome=ExecutionOutcome(
+                        failure_reason=f"All {len(jobs)} fetched job(s) were already processed"
+                    ),
+                    run_id=self._run_id,
+                )
+            )
+            return
+
         emails_sent_today = self._sheets.count_emails_sent_today()
         recent_sent_recipients = self._sheets.get_recent_sent_recipients()
 
         groq_rate_limited = False
-        for job in jobs:
+        for job in jobs_to_process:
             context = JobExecutionContext(job=job, run_id=self._run_id, outcome=ExecutionOutcome())
             if groq_rate_limited:
                 context.outcome.failure_reason = "Skipped because Groq rate limit was reached earlier in this run"
@@ -159,15 +189,15 @@ class JobAgentOrchestrator:
                 self._sheets.append_result(context)
 
     def _fetch_jobs_from_sources(self) -> list[JobRecord]:
-        fetchers = {"apify": self._apify.fetch_latest_jobs}
+        fetchers = {"apify": (self._apify.fetch_latest_jobs, settings.max_jobs)}
         if self._jobspy:
-            fetchers["jobspy"] = self._jobspy.fetch_latest_jobs
+            fetchers["jobspy"] = (self._jobspy.fetch_latest_jobs, settings.jobspy_max_fetched_jobs)
 
         jobs_by_key: dict[str, JobRecord] = {}
         with ThreadPoolExecutor(max_workers=len(fetchers)) as executor:
             futures = {
-                executor.submit(fetcher, settings.max_jobs): source
-                for source, fetcher in fetchers.items()
+                executor.submit(fetcher, limit): source
+                for source, (fetcher, limit) in fetchers.items()
             }
             for future in as_completed(futures):
                 source = futures[future]
@@ -184,7 +214,7 @@ class JobAgentOrchestrator:
                     if key and key not in jobs_by_key:
                         jobs_by_key[key] = job
 
-        return list(jobs_by_key.values())[: settings.max_jobs]
+        return list(jobs_by_key.values())
 
     def _append_source_failure(self, source: str, exc: Exception) -> None:
         source_label = source.upper()

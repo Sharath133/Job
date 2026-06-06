@@ -63,7 +63,7 @@ jobs:
       - name: Run autonomous job agent
         env:
           RUN_MODE: live
-          MAX_JOBS: 10
+          MAX_JOBS: 20
           APIFY_TOKEN: ${{ secrets.APIFY_TOKEN }}
           APIFY_ACTOR_ID: ${{ secrets.APIFY_ACTOR_ID }}
           JOBSPY_ENABLED: true
@@ -72,6 +72,8 @@ jobs:
           JOBSPY_LOCATION: India,Bangalore,Hyderabad,Noida,Gurgaon,Remote
           JOBSPY_HOURS_OLD: 24
           JOBSPY_FETCH_DESCRIPTION: true
+          JOBSPY_RESULTS_PER_SEARCH: 25
+          JOBSPY_MAX_FETCHED_JOBS: 200
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
           GROQ_MODEL: llama-3.1-8b-instant
           GROQ_REQUEST_DELAY_SECONDS: 30

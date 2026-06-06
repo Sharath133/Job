@@ -79,12 +79,14 @@ class JobSpyClient:
         location: str,
         hours_old: int,
         fetch_description: bool,
+        results_per_search: int = 25,
     ) -> None:
         self._sites = _site_names(sites)
         self._search_terms = _csv_values(search_term, "python developer")
         self._locations = _csv_values(location, "India")
         self._hours_old = hours_old
         self._fetch_description = fetch_description
+        self._results_per_search = max(1, results_per_search)
 
     def fetch_latest_jobs(self, max_jobs: int) -> list[JobRecord]:
         result_limit = max(1, max_jobs)
@@ -95,13 +97,14 @@ class JobSpyClient:
                 remaining = result_limit - len(jobs_by_key)
                 if remaining <= 0:
                     return list(jobs_by_key.values())
+                results_wanted = min(self._results_per_search, remaining)
 
                 rows = scrape_jobs(
                     site_name=self._sites,
                     search_term=search_term,
                     google_search_term=f"{search_term} jobs near {location} since yesterday",
                     location=location,
-                    results_wanted=remaining,
+                    results_wanted=results_wanted,
                     hours_old=self._hours_old,
                     country_indeed="India",
                     linkedin_fetch_description=self._fetch_description,

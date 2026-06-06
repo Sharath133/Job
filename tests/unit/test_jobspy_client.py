@@ -65,3 +65,42 @@ def test_jobspy_client_supports_multiple_terms_and_locations(monkeypatch) -> Non
         ("software engineer", "Bangalore", 2),
         ("backend engineer", "India", 1),
     ]
+
+
+def test_jobspy_client_uses_batch_size_across_search_combinations(monkeypatch) -> None:
+    calls: list[tuple[str, str, int]] = []
+
+    def fake_scrape_jobs(**kwargs):
+        calls.append((kwargs["search_term"], kwargs["location"], kwargs["results_wanted"]))
+        start = len(calls) * 10
+        return pd.DataFrame(
+            [
+                {
+                    "id": f"li-{start + idx}",
+                    "title": kwargs["search_term"],
+                    "company": "Acme",
+                    "location": kwargs["location"],
+                    "job_url": f"https://www.linkedin.com/jobs/view/{start + idx}",
+                    "description": "Build systems",
+                }
+                for idx in range(kwargs["results_wanted"])
+            ]
+        )
+
+    monkeypatch.setattr("src.services.jobspy_client.scrape_jobs", fake_scrape_jobs)
+
+    jobs = JobSpyClient(
+        sites="linkedin",
+        search_term="software engineer,backend engineer",
+        location="India,Bangalore",
+        hours_old=24,
+        fetch_description=True,
+        results_per_search=2,
+    ).fetch_latest_jobs(5)
+
+    assert len(jobs) == 5
+    assert calls == [
+        ("software engineer", "India", 2),
+        ("software engineer", "Bangalore", 2),
+        ("backend engineer", "India", 1),
+    ]
