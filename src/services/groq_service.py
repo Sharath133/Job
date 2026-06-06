@@ -1,11 +1,24 @@
 from __future__ import annotations
 
 import json
+import re
+from dataclasses import dataclass
 
 import requests
 
 from src.models import EmailDraft, JobRecord
 from src.utils.validators import Validators
+
+
+@dataclass(slots=True)
+class GroqRateLimitError(RuntimeError):
+    message: str
+    retry_after_seconds: float | None = None
+
+    def __str__(self) -> str:
+        if self.retry_after_seconds is None:
+            return self.message
+        return f"{self.message} Retry after about {self.retry_after_seconds:.1f} seconds."
 
 
 class GroqService:
@@ -125,6 +138,28 @@ class GroqService:
             json=payload,
             timeout=45,
         )
+        if response.status_code == 429:
+            retry_after = _retry_after_seconds(response)
+            raise GroqRateLimitError("Groq rate limit reached", retry_after)
         response.raise_for_status()
         body = response.json()
         return body["choices"][0]["message"]["content"].strip()
+
+
+def _retry_after_seconds(response: requests.Response) -> float | None:
+    header_value = response.headers.get("retry-after")
+    if header_value:
+        try:
+            return float(header_value)
+        except ValueError:
+            pass
+
+    try:
+        message = str((response.json().get("error") or {}).get("message") or "")
+    except ValueError:
+        message = response.text
+
+    match = re.search(r"try again in ([0-9.]+)s", message, re.IGNORECASE)
+    if match:
+        return float(match.group(1))
+    return None

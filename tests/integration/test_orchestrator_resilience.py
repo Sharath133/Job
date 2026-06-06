@@ -1,5 +1,6 @@
 from src.models import EmailDraft, ExecutionOutcome, JobExecutionContext, JobRecord
 from src.main import JobAgentOrchestrator
+from src.services.groq_service import GroqRateLimitError
 
 
 class FakeEmail:
@@ -101,3 +102,60 @@ def test_fetch_jobs_continues_when_one_source_fails() -> None:
 
     assert [job.job_id for job in jobs] == ["job-1"]
     assert orchestrator._sheets.rows[0].job.job_id == "APIFY_FETCH_FAILED_run-id"
+
+
+class FakeJobSource:
+    def fetch_latest_jobs(self, max_jobs: int) -> list[JobRecord]:
+        return [
+            JobRecord(
+                job_id=f"job-{idx}",
+                title="Python Developer",
+                company="Acme",
+                description="Build Python services",
+                job_url=f"https://example.com/job-{idx}",
+                application_url=f"https://example.com/job-{idx}",
+            )
+            for idx in range(3)
+        ]
+
+
+class RateLimitedGroq:
+    def __init__(self) -> None:
+        self.score_calls = 0
+
+    def score_job(self, job: JobRecord, resume_summary: str) -> int:
+        self.score_calls += 1
+        raise GroqRateLimitError("Groq rate limit reached", retry_after_seconds=12.0)
+
+
+class NoopLead:
+    pass
+
+
+class NoopSheets(FakeSheets):
+    def get_existing_job_ids(self) -> set[str]:
+        return set()
+
+    def count_emails_sent_today(self) -> int:
+        return 0
+
+
+def test_run_stops_groq_calls_after_rate_limit() -> None:
+    orchestrator = JobAgentOrchestrator.__new__(JobAgentOrchestrator)
+    orchestrator._run_id = "run-id"
+    orchestrator._logger = FakeLogger()
+    orchestrator._sheets = NoopSheets()
+    orchestrator._apify = FakeJobSource()
+    orchestrator._jobspy = None
+    orchestrator._groq = RateLimitedGroq()
+    orchestrator._lead = NoopLead()
+    orchestrator._email = object()
+    orchestrator._playwright = object()
+
+    orchestrator.run()
+
+    assert orchestrator._groq.score_calls == 1
+    assert len(orchestrator._sheets.rows) == 3
+    assert "Groq rate limited" in orchestrator._sheets.rows[0].outcome.failure_reason
+    assert "Skipped because Groq rate limit" in orchestrator._sheets.rows[1].outcome.failure_reason
+    assert "Skipped because Groq rate limit" in orchestrator._sheets.rows[2].outcome.failure_reason

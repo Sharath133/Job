@@ -8,6 +8,7 @@ from src.models import ExecutionOutcome, JobExecutionContext, JobRecord, JobStat
 from src.services.apify_client import ApifyJobClient
 from src.services.company_domain_service import CompanyDomainService
 from src.services.google_search_service import GoogleSearchService
+from src.services.groq_service import GroqRateLimitError
 from src.services.hunter_service import HunterService
 from src.services.jobspy_client import JobSpyClient
 from src.services.lead_service import LeadService
@@ -124,10 +125,21 @@ class JobAgentOrchestrator:
         existing_ids = self._sheets.get_existing_job_ids()
         emails_sent_today = self._sheets.count_emails_sent_today()
 
+        groq_rate_limited = False
         for job in jobs:
             context = JobExecutionContext(job=job, run_id=self._run_id, outcome=ExecutionOutcome())
+            if groq_rate_limited:
+                context.outcome.failure_reason = "Skipped because Groq rate limit was reached earlier in this run"
+                context.state = JobState.FINALIZED
+                self._sheets.append_result(context)
+                continue
+
             try:
                 self._process_single_job(context, existing_ids, emails_sent_today)
+            except GroqRateLimitError as exc:
+                context.outcome.failure_reason = f"Groq rate limited: {exc}"
+                context.state = JobState.FINALIZED
+                groq_rate_limited = True
             except Exception as exc:  # noqa: BLE001
                 context.outcome.failure_reason = f"Unhandled failure: {exc}"
                 context.state = JobState.FINALIZED
