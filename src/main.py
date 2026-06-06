@@ -1,13 +1,15 @@
 from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from datetime import datetime, timedelta, timezone
 import uuid
 
 from src.config import settings
-from src.models import ExecutionOutcome, JobExecutionContext, JobRecord, JobState
+from src.models import EmailSendResult, ExecutionOutcome, JobExecutionContext, JobRecord, JobState
 from src.services.apify_client import ApifyJobClient
 from src.services.company_domain_service import CompanyDomainService
 from src.services.google_search_service import GoogleSearchService
+from src.services.gmail_service import GmailService
 from src.services.groq_service import GroqRateLimitError
 from src.services.hunter_service import HunterService
 from src.services.jobspy_client import JobSpyClient
@@ -109,6 +111,16 @@ class JobAgentOrchestrator:
             settings.gmail_app_password,
             settings.daily_email_limit,
         )
+        self._gmail = (
+            GmailService(
+                settings.gmail_api_client_id,
+                settings.gmail_api_client_secret,
+                settings.gmail_api_refresh_token,
+                settings.gmail_api_from_email,
+            )
+            if settings.gmail_api_enabled
+            else None
+        )
         self._playwright = PlaywrightApplyService(
             settings.user_agent,
             settings.resume_path,
@@ -138,6 +150,7 @@ class JobAgentOrchestrator:
                     run_id=self._run_id,
                 )
             )
+            self._process_due_followups()
             return
 
         new_jobs = [job for job in jobs if job.job_id not in existing_ids]
@@ -167,6 +180,7 @@ class JobAgentOrchestrator:
                     run_id=self._run_id,
                 )
             )
+            self._process_due_followups()
             return
 
         emails_sent_today = self._sheets.count_emails_sent_today()
@@ -192,6 +206,8 @@ class JobAgentOrchestrator:
                 context.state = JobState.FINALIZED
             finally:
                 self._sheets.append_result(context)
+
+        self._process_due_followups()
 
     def _fetch_jobs_from_sources(self) -> list[JobRecord]:
         fetchers = {"apify": (self._apify.fetch_latest_jobs, settings.max_jobs)}
@@ -301,12 +317,66 @@ class JobAgentOrchestrator:
             return
 
         try:
-            self._email.send_email(context.recruiter.email, context.email_draft, settings.resume_path)
+            sent_at = self._utc_now()
+            sender = getattr(self, "_gmail", None) or self._email
+            result = sender.send_email(context.recruiter.email, context.email_draft, settings.resume_path)
+            if result is None:
+                result = EmailSendResult()
             context.outcome.email_status = "sent"
+            context.initial_email_sent_at = sent_at
+            context.next_followup_due_at = self._next_followup_due_at(sent_at, 0)
+            context.reply_status = "unknown"
+            context.thread_id = result.thread_id
+            context.message_id = result.message_id
             recent_sent_recipients.add(recipient)
         except Exception as exc:  # noqa: BLE001
             context.outcome.email_status = "failed"
-            context.outcome.failure_reason = f"SMTP failure: {exc}"
+            context.outcome.failure_reason = f"Email failure: {exc}"
+
+    def _process_due_followups(self) -> None:
+        if not settings.followup_enabled:
+            return
+        gmail = getattr(self, "_gmail", None)
+        if not gmail:
+            self._logger.info("Gmail API is not configured; skipping follow-up processing")
+            return
+
+        followups_sent_today = self._sheets.count_followups_sent_today()
+        if followups_sent_today >= settings.followup_daily_limit:
+            self._logger.info("Follow-up daily limit reached; skipping follow-up processing")
+            return
+
+        due_followups = self._sheets.get_due_followups(settings.followup_max_count)
+        for followup in due_followups:
+            if followups_sent_today >= settings.followup_daily_limit:
+                break
+            try:
+                if gmail.has_reply(followup.thread_id, settings.gmail_api_from_email):
+                    self._sheets.mark_replied(followup.row_number)
+                    continue
+
+                result = gmail.send_followup(followup)
+                sent_at = self._utc_now()
+                next_count = followup.followup_count + 1
+                next_due_at = self._next_followup_due_at(
+                    followup.initial_email_sent_at or followup.timestamp,
+                    next_count,
+                )
+                self._sheets.update_followup_sent(
+                    followup.row_number,
+                    next_count,
+                    sent_at,
+                    next_due_at,
+                    result,
+                )
+                followups_sent_today += 1
+            except Exception as exc:  # noqa: BLE001
+                self._logger.warning(
+                    "Follow-up processing failed for row %s job_id=%s: %s",
+                    followup.row_number,
+                    followup.job_id,
+                    exc,
+                )
 
     def _execute_portal_step(self, context: JobExecutionContext) -> None:
         if not context.job.application_url:
@@ -329,6 +399,29 @@ class JobAgentOrchestrator:
             if context.outcome.failure_reason:
                 context.outcome.failure_reason += " | "
             context.outcome.failure_reason += f"Playwright failure: {exc}"
+
+    @staticmethod
+    def _utc_now() -> str:
+        return datetime.now(timezone.utc).isoformat()
+
+    @staticmethod
+    def _parse_datetime(value: str) -> datetime:
+        try:
+            parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        except ValueError:
+            return datetime.now(timezone.utc)
+        if parsed.tzinfo is None:
+            return parsed.replace(tzinfo=timezone.utc)
+        return parsed
+
+    def _next_followup_due_at(self, initial_sent_at: str, followup_count: int) -> str:
+        if followup_count >= settings.followup_max_count:
+            return ""
+
+        offsets = settings.followup_due_day_offsets
+        offset_index = min(followup_count, len(offsets) - 1)
+        initial_time = self._parse_datetime(initial_sent_at)
+        return (initial_time + timedelta(days=offsets[offset_index])).isoformat()
 
 
 def main() -> None:

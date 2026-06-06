@@ -4,7 +4,7 @@ import smtplib
 from email.message import EmailMessage
 from pathlib import Path
 
-from src.models import EmailDraft
+from src.models import EmailDraft, EmailSendResult
 from src.utils.email_html_utils import markdown_bold_to_html, strip_markdown_bold
 
 
@@ -28,7 +28,12 @@ class EmailService:
     def can_send(self, already_sent_today: int) -> bool:
         return already_sent_today < self._daily_limit
 
-    def send_email(self, recipient_email: str, draft: EmailDraft, attachment_path: str | None = None) -> None:
+    def send_email(
+        self,
+        recipient_email: str,
+        draft: EmailDraft,
+        attachment_path: str | None = None,
+    ) -> EmailSendResult:
         if not draft.is_valid:
             raise ValueError(f"Invalid email draft: {draft.validation_error}")
 
@@ -45,6 +50,7 @@ class EmailService:
             smtp.starttls()
             smtp.login(self._sender_email, self._app_password)
             smtp.send_message(message)
+        return EmailSendResult()
 
     @staticmethod
     def _attach_file(message: EmailMessage, attachment_path: str) -> None:

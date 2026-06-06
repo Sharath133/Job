@@ -1,0 +1,111 @@
+from __future__ import annotations
+
+from src.models import EmailDraft, FollowupRow
+from src.services.gmail_service import GmailService
+
+
+class FakeExecute:
+    def __init__(self, payload: dict) -> None:
+        self._payload = payload
+
+    def execute(self) -> dict:
+        return self._payload
+
+
+class FakeMessages:
+    def __init__(self, captured: dict) -> None:
+        self._captured = captured
+
+    def send(self, userId: str, body: dict) -> FakeExecute:  # noqa: N803
+        self._captured["send"] = {"userId": userId, "body": body}
+        return FakeExecute({"id": "message-1", "threadId": body.get("threadId", "thread-1")})
+
+
+class FakeThreads:
+    def __init__(self, payload: dict) -> None:
+        self._payload = payload
+
+    def get(self, **kwargs) -> FakeExecute:
+        return FakeExecute(self._payload)
+
+
+class FakeUsers:
+    def __init__(self, captured: dict, thread_payload: dict) -> None:
+        self._captured = captured
+        self._thread_payload = thread_payload
+
+    def messages(self) -> FakeMessages:
+        return FakeMessages(self._captured)
+
+    def threads(self) -> FakeThreads:
+        return FakeThreads(self._thread_payload)
+
+
+class FakeGmail:
+    def __init__(self, captured: dict, thread_payload: dict | None = None) -> None:
+        self._captured = captured
+        self._thread_payload = thread_payload or {}
+
+    def users(self) -> FakeUsers:
+        return FakeUsers(self._captured, self._thread_payload)
+
+
+def test_gmail_send_email_returns_message_metadata() -> None:
+    captured: dict = {}
+    service = GmailService("client", "secret", "refresh", "sender@example.com")
+    service._service = FakeGmail(captured)  # type: ignore[assignment]
+
+    result = service.send_email(
+        "recruiter@example.com",
+        EmailDraft(subject="Role at **Acme**", body="Hi **Jane**", is_valid=True),
+    )
+
+    assert result.message_id == "message-1"
+    assert result.thread_id == "thread-1"
+    assert captured["send"]["userId"] == "me"
+    assert captured["send"]["body"]["raw"]
+
+
+def test_gmail_followup_uses_existing_thread() -> None:
+    captured: dict = {}
+    service = GmailService("client", "secret", "refresh", "sender@example.com")
+    service._service = FakeGmail(captured)  # type: ignore[assignment]
+
+    result = service.send_followup(
+        FollowupRow(
+            row_number=2,
+            timestamp="",
+            job_id="job-1",
+            job_title="Backend Engineer",
+            company="Acme",
+            recruiter_name="Jane",
+            recruiter_email="jane@acme.com",
+            email_subject="Interested in Backend Engineer",
+            followup_count=0,
+            initial_email_sent_at="",
+            last_followup_sent_at="",
+            next_followup_due_at="",
+            reply_status="unknown",
+            thread_id="thread-123",
+            message_id="message-1",
+        )
+    )
+
+    assert result.thread_id == "thread-123"
+    assert captured["send"]["body"]["threadId"] == "thread-123"
+
+
+def test_gmail_has_reply_detects_non_sender_message() -> None:
+    captured: dict = {}
+    service = GmailService("client", "secret", "refresh", "sender@example.com")
+    service._service = FakeGmail(  # type: ignore[assignment]
+        captured,
+        {
+            "messages": [
+                {"payload": {"headers": [{"name": "From", "value": "sender@example.com"}]}},
+                {"payload": {"headers": [{"name": "From", "value": "Jane <jane@acme.com>"}]}},
+            ]
+        },
+    )
+
+    assert service.has_reply("thread-1")

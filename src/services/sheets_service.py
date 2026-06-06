@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 
 import gspread
 
-from src.models import JobExecutionContext
+from src.models import EmailSendResult, FollowupRow, JobExecutionContext
 
 
 def _column_letter(column_count: int) -> str:
@@ -40,6 +40,13 @@ SHEET_COLUMNS = [
     "failure_reason",
     "screenshot_path",
     "run_id",
+    "initial_email_sent_at",
+    "followup_count",
+    "last_followup_sent_at",
+    "next_followup_due_at",
+    "reply_status",
+    "thread_id",
+    "message_id",
 ]
 
 
@@ -117,3 +124,128 @@ class SheetsService:
             [context.to_sheet_row()],
             value_input_option="RAW",
         )
+
+    def get_due_followups(self, max_followups: int, now: datetime | None = None) -> list[FollowupRow]:
+        now = now or datetime.now(timezone.utc)
+        due_rows: list[FollowupRow] = []
+        for index, row in enumerate(self._get_records(), start=2):
+            if str(row.get("email_status", "")) != "sent":
+                continue
+            if str(row.get("reply_status", "unknown")).strip().lower() == "replied":
+                continue
+            if not str(row.get("thread_id", "")).strip():
+                continue
+
+            followup_count = self._as_int(row.get("followup_count"))
+            if followup_count >= max_followups:
+                continue
+
+            due_at = self._parse_datetime(row.get("next_followup_due_at"))
+            if not due_at or due_at > now:
+                continue
+
+            recruiter_email = str(row.get("recruiter_email", "")).strip()
+            if not recruiter_email:
+                continue
+
+            due_rows.append(
+                FollowupRow(
+                    row_number=index,
+                    timestamp=str(row.get("timestamp", "")),
+                    job_id=str(row.get("job_id", "")),
+                    job_title=str(row.get("job_title", "")),
+                    company=str(row.get("company", "")),
+                    recruiter_name=str(row.get("recruiter_name", "")),
+                    recruiter_email=recruiter_email,
+                    email_subject=str(row.get("email_subject", "")),
+                    followup_count=followup_count,
+                    initial_email_sent_at=str(row.get("initial_email_sent_at", "")),
+                    last_followup_sent_at=str(row.get("last_followup_sent_at", "")),
+                    next_followup_due_at=str(row.get("next_followup_due_at", "")),
+                    reply_status=str(row.get("reply_status", "unknown")),
+                    thread_id=str(row.get("thread_id", "")),
+                    message_id=str(row.get("message_id", "")),
+                )
+            )
+        return due_rows
+
+    def count_followups_sent_today(self) -> int:
+        today = datetime.now(timezone.utc).date()
+        count = 0
+        for row in self._get_records():
+            sent_at = self._parse_datetime(row.get("last_followup_sent_at"))
+            if sent_at and sent_at.date() == today:
+                count += 1
+        return count
+
+    def mark_replied(self, row_number: int) -> None:
+        self._update_row_fields(row_number, {"reply_status": "replied"})
+
+    def update_followup_sent(
+        self,
+        row_number: int,
+        followup_count: int,
+        sent_at: str,
+        next_due_at: str,
+        result: EmailSendResult,
+    ) -> None:
+        self._update_row_fields(
+            row_number,
+            {
+                "followup_count": str(followup_count),
+                "last_followup_sent_at": sent_at,
+                "next_followup_due_at": next_due_at,
+                "reply_status": "no_reply",
+                "message_id": result.message_id,
+                "thread_id": result.thread_id,
+            },
+        )
+
+    def update_initial_email_metadata(
+        self,
+        row_number: int,
+        sent_at: str,
+        next_due_at: str,
+        result: EmailSendResult,
+    ) -> None:
+        self._update_row_fields(
+            row_number,
+            {
+                "initial_email_sent_at": sent_at,
+                "followup_count": "0",
+                "next_followup_due_at": next_due_at,
+                "reply_status": "unknown",
+                "message_id": result.message_id,
+                "thread_id": result.thread_id,
+            },
+        )
+
+    def _update_row_fields(self, row_number: int, fields: dict[str, str]) -> None:
+        for column_name, value in fields.items():
+            column = SHEET_COLUMNS.index(column_name) + 1
+            column_letter = _column_letter(column)
+            self._sheet.update(
+                f"{column_letter}{row_number}:{column_letter}{row_number}",
+                [[value]],
+                value_input_option="RAW",
+            )
+
+    @staticmethod
+    def _parse_datetime(value: object) -> datetime | None:
+        raw_value = str(value or "").strip()
+        if not raw_value:
+            return None
+        try:
+            parsed = datetime.fromisoformat(raw_value.replace("Z", "+00:00"))
+        except ValueError:
+            return None
+        if parsed.tzinfo is None:
+            return parsed.replace(tzinfo=timezone.utc)
+        return parsed
+
+    @staticmethod
+    def _as_int(value: object) -> int:
+        try:
+            return int(str(value or "0").strip())
+        except ValueError:
+            return 0

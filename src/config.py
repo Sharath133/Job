@@ -46,6 +46,14 @@ class Settings(BaseSettings):
     gmail_smtp_port: int = Field(default=587, alias="GMAIL_SMTP_PORT")
     gmail_sender_email: str = Field(alias="GMAIL_SENDER_EMAIL")
     gmail_app_password: str = Field(alias="GMAIL_APP_PASSWORD")
+    gmail_api_client_id: str = Field(default="", alias="GMAIL_API_CLIENT_ID")
+    gmail_api_client_secret: str = Field(default="", alias="GMAIL_API_CLIENT_SECRET")
+    gmail_api_refresh_token: str = Field(default="", alias="GMAIL_API_REFRESH_TOKEN")
+    gmail_api_sender_email: str = Field(default="", alias="GMAIL_API_SENDER_EMAIL")
+    followup_enabled: bool = Field(default=True, alias="FOLLOWUP_ENABLED")
+    followup_max_count: int = Field(default=3, alias="FOLLOWUP_MAX_COUNT")
+    followup_due_days: str = Field(default="1,2,3", alias="FOLLOWUP_DUE_DAYS")
+    followup_daily_limit: int = Field(default=10, alias="FOLLOWUP_DAILY_LIMIT")
 
     google_sheet_id: str = Field(alias="GOOGLE_SHEET_ID")
     google_service_account_file: str = Field(alias="GOOGLE_SERVICE_ACCOUNT_FILE")
@@ -82,6 +90,34 @@ class Settings(BaseSettings):
     @property
     def hunter_enabled(self) -> bool:
         return bool(self.hunter_api_key.strip())
+
+    @property
+    def gmail_api_enabled(self) -> bool:
+        return bool(
+            self.gmail_api_client_id.strip()
+            and self.gmail_api_client_secret.strip()
+            and self.gmail_api_refresh_token.strip()
+            and (self.gmail_api_sender_email.strip() or self.gmail_sender_email.strip())
+        )
+
+    @property
+    def gmail_api_from_email(self) -> str:
+        return self.gmail_api_sender_email.strip() or self.gmail_sender_email
+
+    @property
+    def followup_due_day_offsets(self) -> list[int]:
+        offsets: list[int] = []
+        for raw_value in self.followup_due_days.split(","):
+            raw_value = raw_value.strip()
+            if not raw_value:
+                continue
+            try:
+                value = int(raw_value)
+            except ValueError:
+                continue
+            if value > 0:
+                offsets.append(value)
+        return offsets or [1, 2, 3]
 
     def validate_runtime_paths(self) -> None:
         """Ensure expected runtime folders exist."""

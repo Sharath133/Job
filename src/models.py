@@ -56,6 +56,12 @@ class EmailDraft:
 
 
 @dataclass(slots=True)
+class EmailSendResult:
+    message_id: str = ""
+    thread_id: str = ""
+
+
+@dataclass(slots=True)
 class ExecutionOutcome:
     email_status: str = "not_attempted"
     portal_status: str = "not_attempted"
@@ -73,6 +79,13 @@ class JobExecutionContext:
     email_draft: EmailDraft | None = None
     outcome: ExecutionOutcome = field(default_factory=ExecutionOutcome)
     run_id: str = ""
+    initial_email_sent_at: str = ""
+    followup_count: int = 0
+    last_followup_sent_at: str = ""
+    next_followup_due_at: str = ""
+    reply_status: str = "unknown"
+    thread_id: str = ""
+    message_id: str = ""
     timestamp: str = field(default_factory=lambda: datetime.utcnow().isoformat())
     metadata: dict[str, Any] = field(default_factory=dict)
 
@@ -102,4 +115,30 @@ class JobExecutionContext:
             self.outcome.failure_reason,
             self.outcome.screenshot_path,
             self.run_id,
+            self.initial_email_sent_at,
+            str(self.followup_count),
+            self.last_followup_sent_at,
+            self.next_followup_due_at,
+            self.reply_status,
+            self.thread_id,
+            self.message_id,
         ]
+
+
+@dataclass(slots=True)
+class FollowupRow:
+    row_number: int
+    timestamp: str
+    job_id: str
+    job_title: str
+    company: str
+    recruiter_name: str
+    recruiter_email: str
+    email_subject: str
+    followup_count: int
+    initial_email_sent_at: str
+    last_followup_sent_at: str
+    next_followup_due_at: str
+    reply_status: str
+    thread_id: str
+    message_id: str

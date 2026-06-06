@@ -1,4 +1,4 @@
-from src.models import EmailDraft, ExecutionOutcome, JobExecutionContext, JobRecord, RecruiterLead
+from src.models import EmailDraft, EmailSendResult, ExecutionOutcome, FollowupRow, JobExecutionContext, JobRecord, RecruiterLead
 from src.main import JobAgentOrchestrator
 from src.services.groq_service import GroqRateLimitError
 
@@ -119,6 +119,11 @@ class FakeJobSource:
         ]
 
 
+class EmptyJobSource:
+    def fetch_latest_jobs(self, max_jobs: int) -> list[JobRecord]:
+        return []
+
+
 class RateLimitedGroq:
     def __init__(self) -> None:
         self.score_calls = 0
@@ -141,6 +146,52 @@ class NoopSheets(FakeSheets):
 
     def get_recent_sent_recipients(self) -> set[str]:
         return set()
+
+    def count_followups_sent_today(self) -> int:
+        return 0
+
+    def get_due_followups(self, max_followups: int):
+        return []
+
+
+class DueFollowupSheets(NoopSheets):
+    def __init__(self) -> None:
+        super().__init__()
+        self.updated_followups: list[tuple[int, int, str, str, EmailSendResult]] = []
+
+    def get_due_followups(self, max_followups: int):
+        return [
+            FollowupRow(
+                row_number=4,
+                timestamp="2026-01-01T00:00:00+00:00",
+                job_id="job-1",
+                job_title="Backend Engineer",
+                company="Acme",
+                recruiter_name="Jane",
+                recruiter_email="jane@acme.com",
+                email_subject="Interested in Backend Engineer",
+                followup_count=0,
+                initial_email_sent_at="2026-01-01T00:00:00+00:00",
+                last_followup_sent_at="",
+                next_followup_due_at="2026-01-02T00:00:00+00:00",
+                reply_status="unknown",
+                thread_id="thread-1",
+                message_id="message-1",
+            )
+        ]
+
+    def update_followup_sent(
+        self,
+        row_number: int,
+        followup_count: int,
+        sent_at: str,
+        next_due_at: str,
+        result: EmailSendResult,
+    ) -> None:
+        self.updated_followups.append((row_number, followup_count, sent_at, next_due_at, result))
+
+    def mark_replied(self, row_number: int) -> None:
+        raise AssertionError("No reply should be detected in this test")
 
 
 class ExistingJobSheets(NoopSheets):
@@ -223,6 +274,18 @@ class NoopPlaywright:
     pass
 
 
+class FakeGmail:
+    def __init__(self) -> None:
+        self.sent_followups: list[FollowupRow] = []
+
+    def has_reply(self, thread_id: str, sender_email: str | None = None) -> bool:
+        return False
+
+    def send_followup(self, followup: FollowupRow) -> EmailSendResult:
+        self.sent_followups.append(followup)
+        return EmailSendResult(message_id="message-2", thread_id=followup.thread_id)
+
+
 def test_run_skips_duplicate_recruiter_email_in_same_run() -> None:
     orchestrator = JobAgentOrchestrator.__new__(JobAgentOrchestrator)
     orchestrator._run_id = "run-id"
@@ -262,3 +325,20 @@ def test_run_filters_existing_jobs_before_processing() -> None:
     assert orchestrator._groq.scored_job_ids == ["job-2"]
     assert [row.job.job_id for row in orchestrator._sheets.rows] == ["job-2"]
     assert orchestrator._email.recipients == ["Recruiter@Example.com"]
+
+
+def test_run_processes_due_followups_when_gmail_configured() -> None:
+    orchestrator = JobAgentOrchestrator.__new__(JobAgentOrchestrator)
+    orchestrator._run_id = "run-id"
+    orchestrator._logger = FakeLogger()
+    orchestrator._sheets = DueFollowupSheets()
+    orchestrator._apify = EmptyJobSource()
+    orchestrator._jobspy = None
+    orchestrator._gmail = FakeGmail()
+
+    orchestrator.run()
+
+    assert [row.job.job_id for row in orchestrator._sheets.rows] == ["NO_JOBS_run-id"]
+    assert len(orchestrator._gmail.sent_followups) == 1
+    assert orchestrator._sheets.updated_followups[0][0] == 4
+    assert orchestrator._sheets.updated_followups[0][1] == 1

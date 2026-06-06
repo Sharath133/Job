@@ -4,7 +4,7 @@ from datetime import datetime, timedelta, timezone
 
 from src.services import sheets_service
 from src.services.sheets_service import SHEET_COLUMNS, SheetsService, _column_letter
-from src.models import JobExecutionContext, JobRecord
+from src.models import EmailSendResult, JobExecutionContext, JobRecord
 
 
 class FakeWorksheet:
@@ -122,3 +122,58 @@ def test_append_result_updates_first_empty_schema_row(monkeypatch) -> None:
 
     assert worksheet.updates[-1][0] == f"A3:{_column_letter(len(SHEET_COLUMNS))}3"
     assert worksheet.updates[-1][1][0][1] == "new-job"
+
+
+def test_followup_rows_and_updates(monkeypatch) -> None:
+    due_at = (datetime.now(timezone.utc) - timedelta(minutes=5)).isoformat()
+    future_due_at = (datetime.now(timezone.utc) + timedelta(days=1)).isoformat()
+
+    due_row = [""] * len(SHEET_COLUMNS)
+    due_row[SHEET_COLUMNS.index("timestamp")] = "2026-01-01T00:00:00+00:00"
+    due_row[SHEET_COLUMNS.index("job_id")] = "job-1"
+    due_row[SHEET_COLUMNS.index("job_title")] = "Backend Engineer"
+    due_row[SHEET_COLUMNS.index("company")] = "Acme"
+    due_row[SHEET_COLUMNS.index("recruiter_name")] = "Jane"
+    due_row[SHEET_COLUMNS.index("recruiter_email")] = "jane@acme.com"
+    due_row[SHEET_COLUMNS.index("email_subject")] = "Interested in Backend Engineer"
+    due_row[SHEET_COLUMNS.index("email_status")] = "sent"
+    due_row[SHEET_COLUMNS.index("initial_email_sent_at")] = "2026-01-01T00:00:00+00:00"
+    due_row[SHEET_COLUMNS.index("followup_count")] = "1"
+    due_row[SHEET_COLUMNS.index("next_followup_due_at")] = due_at
+    due_row[SHEET_COLUMNS.index("reply_status")] = "no_reply"
+    due_row[SHEET_COLUMNS.index("thread_id")] = "thread-1"
+    due_row[SHEET_COLUMNS.index("message_id")] = "message-1"
+
+    future_row = [*due_row]
+    future_row[SHEET_COLUMNS.index("job_id")] = "job-2"
+    future_row[SHEET_COLUMNS.index("next_followup_due_at")] = future_due_at
+
+    worksheet = FakeWorksheet(header=SHEET_COLUMNS, rows=[due_row, future_row])
+    monkeypatch.setattr(
+        sheets_service.gspread,
+        "service_account",
+        lambda filename: FakeClient(worksheet),
+    )
+
+    service = SheetsService("service_account.json", "sheet-id", "applied_jobs")
+
+    due_followups = service.get_due_followups(max_followups=3)
+
+    assert len(due_followups) == 1
+    assert due_followups[0].row_number == 2
+    assert due_followups[0].job_id == "job-1"
+
+    service.mark_replied(2)
+    service.update_followup_sent(
+        2,
+        2,
+        "2026-01-02T00:00:00+00:00",
+        "2026-01-03T00:00:00+00:00",
+        EmailSendResult(message_id="message-2", thread_id="thread-1"),
+    )
+
+    updated_ranges = [range_name for range_name, _values in worksheet.updates]
+    reply_column = _column_letter(SHEET_COLUMNS.index("reply_status") + 1)
+    count_column = _column_letter(SHEET_COLUMNS.index("followup_count") + 1)
+    assert f"{reply_column}2:{reply_column}2" in updated_ranges
+    assert f"{count_column}2:{count_column}2" in updated_ranges
