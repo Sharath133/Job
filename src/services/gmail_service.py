@@ -8,6 +8,7 @@ from typing import Any
 
 from src.models import EmailDraft, EmailSendResult, FollowupRow
 from src.utils.email_html_utils import markdown_bold_to_html, strip_markdown_bold
+from src.utils.subject_utils import subject_for_followup
 
 
 GMAIL_SCOPES = [
@@ -58,9 +59,7 @@ class GmailService:
 
     @staticmethod
     def _followup_subject(followup: FollowupRow) -> str:
-        role = followup.job_title or "Role"
-        company = followup.company or "Company"
-        return f"{role} @ {company} | Python, FastAPI, Django | IIT Ropar"
+        return subject_for_followup(followup)
 
     def has_reply(self, thread_id: str, sender_email: str | None = None) -> bool:
         if not thread_id:

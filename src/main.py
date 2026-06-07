@@ -24,6 +24,7 @@ from src.services.session_store import SessionStore
 from src.services.sheets_service import SheetsService
 from src.state_machine import StateMachine
 from src.utils.logging_utils import get_logger
+from src.utils.subject_utils import subject_for_job
 from src.utils.validators import Validators
 
 RESUME_SUMMARY = (
@@ -434,9 +435,7 @@ class JobAgentOrchestrator:
 
     @staticmethod
     def _standard_subject(job: JobRecord) -> str:
-        role = job.title or "Role"
-        company = job.company_info.name or job.company or "Company"
-        return f"{role} @ {company} | Python, FastAPI, Django | IIT Ropar"
+        return subject_for_job(job)
 
     @classmethod
     def _with_standard_subject(cls, draft: EmailDraft, job: JobRecord) -> EmailDraft:
