@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+import base64
+from email import message_from_bytes
+from email.policy import default
+
 from src.models import EmailDraft, FollowupRow
 from src.services.gmail_service import GmailService
 
@@ -93,6 +97,9 @@ def test_gmail_followup_uses_existing_thread() -> None:
 
     assert result.thread_id == "thread-123"
     assert captured["send"]["body"]["threadId"] == "thread-123"
+    raw_message = base64.urlsafe_b64decode(captured["send"]["body"]["raw"])
+    message = message_from_bytes(raw_message, policy=default)
+    assert message["Subject"] == "Backend Engineer @ Acme | Python, FastAPI skill set | IIT Ropar"
 
 
 def test_gmail_has_reply_detects_non_sender_message() -> None:

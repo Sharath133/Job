@@ -46,11 +46,7 @@ class GmailService:
         return self._send_raw_message(message)
 
     def send_followup(self, followup: FollowupRow) -> EmailSendResult:
-        subject = followup.email_subject
-        if subject and not subject.lower().startswith("re:"):
-            subject = f"Re: {subject}"
-        elif not subject:
-            subject = f"Re: {followup.job_title} at {followup.company}"
+        subject = self._followup_subject(followup)
 
         body = self._followup_body(followup)
         message = self._build_message(
@@ -59,6 +55,12 @@ class GmailService:
             body=body,
         )
         return self._send_raw_message(message, thread_id=followup.thread_id)
+
+    @staticmethod
+    def _followup_subject(followup: FollowupRow) -> str:
+        role = followup.job_title or "Role"
+        company = followup.company or "Company"
+        return f"{role} @ {company} | Python, FastAPI skill set | IIT Ropar"
 
     def has_reply(self, thread_id: str, sender_email: str | None = None) -> bool:
         if not thread_id:
