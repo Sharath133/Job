@@ -134,7 +134,7 @@ def test_followup_template_is_consistent_for_all_followups() -> None:
 
     assert body == (
         "Hi Jane,\n\n"
-        "I wanted to follow up again on the Backend Engineer opportunity at Acme. "
+        "I wanted to follow up again on my previous email regarding the Backend Engineer opportunity at Acme. "
         "My backend experience with Python, FastAPI/Django, production APIs, and scalable systems "
         "felt relevant to the role.\n\n"
         "Thank you for your time and consideration.\n\n"
