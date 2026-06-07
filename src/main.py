@@ -6,7 +6,7 @@ import uuid
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from src.config import settings
-from src.models import EmailSendResult, ExecutionOutcome, JobExecutionContext, JobRecord, JobState
+from src.models import EmailDraft, EmailSendResult, ExecutionOutcome, JobExecutionContext, JobRecord, JobState
 from src.services.apify_client import ApifyJobClient
 from src.services.company_domain_service import CompanyDomainService
 from src.services.google_search_service import GoogleSearchService
@@ -288,6 +288,7 @@ class JobAgentOrchestrator:
 
         recruiter_name = context.recruiter.name or "Hiring Team"
         context.email_draft = self._groq.generate_email_draft(context.job, RESUME_SUMMARY, recruiter_name)
+        context.email_draft = self._with_standard_subject(context.email_draft, context.job)
         StateMachine.transition(context, JobState.DRAFTED)
 
         self._execute_email_step(context, emails_sent_today, recent_sent_recipients)
@@ -430,6 +431,21 @@ class JobAgentOrchestrator:
         offset_index = min(followup_count, len(offsets) - 1)
         initial_time = self._parse_datetime(initial_sent_at)
         return (initial_time + timedelta(days=offsets[offset_index])).isoformat()
+
+    @staticmethod
+    def _standard_subject(job: JobRecord) -> str:
+        role = job.title or "Role"
+        company = job.company_info.name or job.company or "Company"
+        return f"{role} @ {company} | Python, FastAPI, Django | IIT Ropar"
+
+    @classmethod
+    def _with_standard_subject(cls, draft: EmailDraft, job: JobRecord) -> EmailDraft:
+        return EmailDraft(
+            subject=cls._standard_subject(job),
+            body=draft.body,
+            is_valid=draft.is_valid,
+            validation_error=draft.validation_error,
+        )
 
     @staticmethod
     def _is_email_pause_day(now: datetime | None = None) -> bool:

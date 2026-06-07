@@ -264,12 +264,14 @@ class SameRecruiterLead:
 class RecordingEmail:
     def __init__(self) -> None:
         self.recipients: list[str] = []
+        self.subjects: list[str] = []
 
     def can_send(self, already_sent_today: int) -> bool:
         return True
 
     def send_email(self, recipient_email: str, draft: EmailDraft, attachment_path: str | None = None) -> None:
         self.recipients.append(recipient_email)
+        self.subjects.append(draft.subject)
 
 
 class NoopPlaywright:
@@ -307,6 +309,9 @@ def test_run_skips_duplicate_recruiter_email_in_same_run(monkeypatch) -> None:
     assert [row.outcome.email_status for row in orchestrator._sheets.rows] == [
         "sent",
         "skipped_recently_sent_to_recruiter",
+    ]
+    assert orchestrator._email.subjects == [
+        "Backend Engineer @ Acme | Python, FastAPI, Django | IIT Ropar"
     ]
     assert "recruiter@example.com" in orchestrator._sheets.rows[1].outcome.failure_reason
 
