@@ -104,3 +104,38 @@ def test_jobspy_client_uses_batch_size_across_search_combinations(monkeypatch) -
         ("software engineer", "Bangalore", 2),
         ("backend engineer", "India", 1),
     ]
+
+
+def test_jobspy_client_continues_when_one_search_combination_fails(monkeypatch) -> None:
+    calls: list[tuple[str, str]] = []
+
+    def fake_scrape_jobs(**kwargs):
+        calls.append((kwargs["search_term"], kwargs["location"]))
+        if len(calls) == 1:
+            raise ValueError("Invalid country string: 'iceland'")
+        return pd.DataFrame(
+            [
+                {
+                    "id": "li-42",
+                    "title": kwargs["search_term"],
+                    "company": "Acme",
+                    "location": kwargs["location"],
+                    "job_url": "https://www.linkedin.com/jobs/view/42",
+                    "description": "Build systems",
+                }
+            ]
+        )
+
+    monkeypatch.setattr("src.services.jobspy_client.scrape_jobs", fake_scrape_jobs)
+
+    jobs = JobSpyClient(
+        sites="linkedin",
+        search_term="backend engineer,python developer",
+        location="India",
+        hours_old=24,
+        fetch_description=True,
+        results_per_search=1,
+    ).fetch_latest_jobs(1)
+
+    assert [job.job_id for job in jobs] == ["42"]
+    assert calls == [("backend engineer", "India"), ("python developer", "India")]

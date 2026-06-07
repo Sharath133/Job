@@ -1,11 +1,15 @@
 from __future__ import annotations
 
 import math
+import logging
 from typing import Any
 
 from jobspy import scrape_jobs
 
 from src.models import CompanyInfo, JobRecord
+
+
+logger = logging.getLogger(__name__)
 
 
 def _is_empty(value: object) -> bool:
@@ -99,17 +103,26 @@ class JobSpyClient:
                     return list(jobs_by_key.values())
                 results_wanted = min(self._results_per_search, remaining)
 
-                rows = scrape_jobs(
-                    site_name=self._sites,
-                    search_term=search_term,
-                    google_search_term=f"{search_term} jobs near {location} since yesterday",
-                    location=location,
-                    results_wanted=results_wanted,
-                    hours_old=self._hours_old,
-                    country_indeed="India",
-                    linkedin_fetch_description=self._fetch_description,
-                    verbose=0,
-                )
+                try:
+                    rows = scrape_jobs(
+                        site_name=self._sites,
+                        search_term=search_term,
+                        google_search_term=f"{search_term} jobs near {location} since yesterday",
+                        location=location,
+                        results_wanted=results_wanted,
+                        hours_old=self._hours_old,
+                        country_indeed="India",
+                        linkedin_fetch_description=self._fetch_description,
+                        verbose=0,
+                    )
+                except Exception as exc:  # noqa: BLE001
+                    logger.warning(
+                        "JobSpy search failed for term=%r location=%r: %s",
+                        search_term,
+                        location,
+                        exc,
+                    )
+                    continue
                 for row in rows.to_dict(orient="records"):
                     job = parse_jobspy_row(row)
                     key = (job.job_url or job.job_id).strip()
