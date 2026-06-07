@@ -1,3 +1,5 @@
+from datetime import datetime, timezone
+
 from src.models import EmailDraft, EmailSendResult, ExecutionOutcome, FollowupRow, JobExecutionContext, JobRecord, RecruiterLead
 from src.main import JobAgentOrchestrator
 from src.services.groq_service import GroqRateLimitError
@@ -286,7 +288,8 @@ class FakeGmail:
         return EmailSendResult(message_id="message-2", thread_id=followup.thread_id)
 
 
-def test_run_skips_duplicate_recruiter_email_in_same_run() -> None:
+def test_run_skips_duplicate_recruiter_email_in_same_run(monkeypatch) -> None:
+    monkeypatch.setattr("src.main.settings.skip_email_on_sunday", False)
     orchestrator = JobAgentOrchestrator.__new__(JobAgentOrchestrator)
     orchestrator._run_id = "run-id"
     orchestrator._logger = FakeLogger()
@@ -308,7 +311,8 @@ def test_run_skips_duplicate_recruiter_email_in_same_run() -> None:
     assert "recruiter@example.com" in orchestrator._sheets.rows[1].outcome.failure_reason
 
 
-def test_run_filters_existing_jobs_before_processing() -> None:
+def test_run_filters_existing_jobs_before_processing(monkeypatch) -> None:
+    monkeypatch.setattr("src.main.settings.skip_email_on_sunday", False)
     orchestrator = JobAgentOrchestrator.__new__(JobAgentOrchestrator)
     orchestrator._run_id = "run-id"
     orchestrator._logger = FakeLogger()
@@ -327,7 +331,8 @@ def test_run_filters_existing_jobs_before_processing() -> None:
     assert orchestrator._email.recipients == ["Recruiter@Example.com"]
 
 
-def test_run_processes_due_followups_when_gmail_configured() -> None:
+def test_run_processes_due_followups_when_gmail_configured(monkeypatch) -> None:
+    monkeypatch.setattr("src.main.settings.skip_email_on_sunday", False)
     orchestrator = JobAgentOrchestrator.__new__(JobAgentOrchestrator)
     orchestrator._run_id = "run-id"
     orchestrator._logger = FakeLogger()
@@ -342,3 +347,13 @@ def test_run_processes_due_followups_when_gmail_configured() -> None:
     assert len(orchestrator._gmail.sent_followups) == 1
     assert orchestrator._sheets.updated_followups[0][0] == 4
     assert orchestrator._sheets.updated_followups[0][1] == 1
+
+
+def test_email_pause_day_uses_local_timezone(monkeypatch) -> None:
+    monkeypatch.setattr("src.main.settings.skip_email_on_sunday", True)
+    monkeypatch.setattr("src.main.settings.local_timezone", "Asia/Calcutta")
+    sunday_ist = datetime(2026, 6, 6, 19, 0, tzinfo=timezone.utc)
+    monday_ist = datetime(2026, 6, 7, 19, 0, tzinfo=timezone.utc)
+
+    assert JobAgentOrchestrator._is_email_pause_day(sunday_ist)
+    assert not JobAgentOrchestrator._is_email_pause_day(monday_ist)

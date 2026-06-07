@@ -54,6 +54,8 @@ class Settings(BaseSettings):
     followup_max_count: int = Field(default=3, alias="FOLLOWUP_MAX_COUNT")
     followup_due_days: str = Field(default="1,2,3", alias="FOLLOWUP_DUE_DAYS")
     followup_daily_limit: int = Field(default=10, alias="FOLLOWUP_DAILY_LIMIT")
+    skip_email_on_sunday: bool = Field(default=True, alias="SKIP_EMAIL_ON_SUNDAY")
+    local_timezone: str = Field(default="Asia/Calcutta", alias="LOCAL_TIMEZONE")
 
     google_sheet_id: str = Field(alias="GOOGLE_SHEET_ID")
     google_service_account_file: str = Field(alias="GOOGLE_SERVICE_ACCOUNT_FILE")

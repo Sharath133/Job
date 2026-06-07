@@ -3,6 +3,7 @@ from __future__ import annotations
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timedelta, timezone
 import uuid
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from src.config import settings
 from src.models import EmailSendResult, ExecutionOutcome, JobExecutionContext, JobRecord, JobState
@@ -315,6 +316,10 @@ class JobAgentOrchestrator:
         if not self._email.can_send(emails_sent_today):
             context.outcome.email_status = "skipped_daily_limit_reached"
             return
+        if self._is_email_pause_day():
+            context.outcome.email_status = "skipped_sunday"
+            context.outcome.failure_reason = "Email sending skipped on Sunday"
+            return
 
         try:
             sent_at = self._utc_now()
@@ -335,6 +340,9 @@ class JobAgentOrchestrator:
 
     def _process_due_followups(self) -> None:
         if not settings.followup_enabled:
+            return
+        if self._is_email_pause_day():
+            self._logger.info("Email sending is skipped on Sunday; skipping follow-up processing")
             return
         gmail = getattr(self, "_gmail", None)
         if not gmail:
@@ -422,6 +430,17 @@ class JobAgentOrchestrator:
         offset_index = min(followup_count, len(offsets) - 1)
         initial_time = self._parse_datetime(initial_sent_at)
         return (initial_time + timedelta(days=offsets[offset_index])).isoformat()
+
+    @staticmethod
+    def _is_email_pause_day(now: datetime | None = None) -> bool:
+        if not settings.skip_email_on_sunday:
+            return False
+        current_time = now or datetime.now(timezone.utc)
+        try:
+            local_time = current_time.astimezone(ZoneInfo(settings.local_timezone))
+        except ZoneInfoNotFoundError:
+            local_time = current_time.astimezone(timezone.utc)
+        return local_time.weekday() == 6
 
 
 def main() -> None:
