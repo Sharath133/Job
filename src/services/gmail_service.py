@@ -121,27 +121,15 @@ class GmailService:
     @staticmethod
     def _followup_body(followup: FollowupRow) -> str:
         recruiter_name = followup.recruiter_name or "there"
-        next_number = followup.followup_count + 1
-        if next_number == 1:
-            return (
-                f"Hi {recruiter_name},\n\n"
-                f"Just following up on my earlier email regarding the {followup.job_title} role at "
-                f"{followup.company}. I would be glad to share more details if the role is still open.\n\n"
-                "Best,\nSharath"
-            )
-        if next_number == 2:
-            return (
-                f"Hi {recruiter_name},\n\n"
-                f"I wanted to follow up again on the {followup.job_title} opportunity at {followup.company}. "
-                "My backend experience with Python, FastAPI/Django, production APIs, and scalable systems "
-                "felt relevant to the role.\n\n"
-                "Best,\nSharath"
-            )
         return (
             f"Hi {recruiter_name},\n\n"
-            f"This is my final follow-up regarding the {followup.job_title} role at {followup.company}. "
-            "I remain interested and would be happy to connect if there is a fit.\n\n"
-            "Best,\nSharath"
+            f"I wanted to follow up again on my previous email regarding the {followup.job_title} opportunity at {followup.company}. "
+            "My backend experience with Python, FastAPI/Django, production APIs, and scalable systems "
+            "felt relevant to the role.\n\n"
+            "Thank you for your time and consideration.\n\n"
+            "Thankyou,\n"
+            "Sharath,\n"
+            "9347485455"
         )
 
     def _gmail(self) -> Any:

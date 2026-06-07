@@ -109,3 +109,36 @@ def test_gmail_has_reply_detects_non_sender_message() -> None:
     )
 
     assert service.has_reply("thread-1")
+
+
+def test_followup_template_is_consistent_for_all_followups() -> None:
+    followup = FollowupRow(
+        row_number=2,
+        timestamp="",
+        job_id="job-1",
+        job_title="Backend Engineer",
+        company="Acme",
+        recruiter_name="Jane",
+        recruiter_email="jane@acme.com",
+        email_subject="Interested in Backend Engineer",
+        followup_count=2,
+        initial_email_sent_at="",
+        last_followup_sent_at="",
+        next_followup_due_at="",
+        reply_status="unknown",
+        thread_id="thread-123",
+        message_id="message-1",
+    )
+
+    body = GmailService._followup_body(followup)
+
+    assert body == (
+        "Hi Jane,\n\n"
+        "I wanted to follow up again on the Backend Engineer opportunity at Acme. "
+        "My backend experience with Python, FastAPI/Django, production APIs, and scalable systems "
+        "felt relevant to the role.\n\n"
+        "Thank you for your time and consideration.\n\n"
+        "Thankyou,\n"
+        "Sharath,\n"
+        "9347485455"
+    )
