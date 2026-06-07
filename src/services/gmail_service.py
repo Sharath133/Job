@@ -60,7 +60,7 @@ class GmailService:
     def _followup_subject(followup: FollowupRow) -> str:
         role = followup.job_title or "Role"
         company = followup.company or "Company"
-        return f"{role} @ {company} | Python, FastAPI skill set | IIT Ropar"
+        return f"{role} @ {company} | Python, FastAPI, Django | IIT Ropar"
 
     def has_reply(self, thread_id: str, sender_email: str | None = None) -> bool:
         if not thread_id:

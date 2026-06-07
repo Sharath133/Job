@@ -99,7 +99,7 @@ def test_gmail_followup_uses_existing_thread() -> None:
     assert captured["send"]["body"]["threadId"] == "thread-123"
     raw_message = base64.urlsafe_b64decode(captured["send"]["body"]["raw"])
     message = message_from_bytes(raw_message, policy=default)
-    assert message["Subject"] == "Backend Engineer @ Acme | Python, FastAPI skill set | IIT Ropar"
+    assert message["Subject"] == "Backend Engineer @ Acme | Python, FastAPI, Django | IIT Ropar"
 
 
 def test_gmail_has_reply_detects_non_sender_message() -> None:
