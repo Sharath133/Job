@@ -32,12 +32,17 @@ def test_snov_limit_enforced(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_snov_prefers_recruiter_title(monkeypatch: pytest.MonkeyPatch) -> None:
     calls: list[str] = []
 
-    def fake_post(url: str, data: dict | None = None, timeout: int = 30) -> DummyResponse:
+    def fake_post(url: str, data: dict | None = None, timeout: int = 30, **kwargs) -> DummyResponse:
         calls.append(url)
         if url.endswith("access_token"):
             return DummyResponse({"access_token": "token"})
+        return DummyResponse({"task_hash": "task-1", "result": "https://api.snov.io/result/task-1"})
+
+    def fake_get(url: str, **kwargs) -> DummyResponse:
+        calls.append(url)
         return DummyResponse(
             {
+                "status": "completed",
                 "data": [
                     {
                         "email": "ceo@acme.com",
@@ -56,8 +61,36 @@ def test_snov_prefers_recruiter_title(monkeypatch: pytest.MonkeyPatch) -> None:
         )
 
     monkeypatch.setattr("src.services.snov_service.requests.post", fake_post)
+    monkeypatch.setattr("src.services.snov_service.requests.get", fake_get)
     lead = SnovService(
         client_id="id", client_secret="secret", max_searches_per_run=3, domain_resolver=FakeDomainResolver()
     ).find_recruiter_for_company("Acme Corp")
     assert lead.email == "jane@acme.com"
     assert calls[0].endswith("oauth/access_token")
+    assert calls[1].endswith("domain-search/domain-emails/start")
+    assert calls[2] == "https://api.snov.io/result/task-1"
+
+
+def test_snov_uses_task_hash_result_url_when_result_missing(monkeypatch: pytest.MonkeyPatch) -> None:
+    service = SnovService(
+        client_id="id", client_secret="secret", max_searches_per_run=3, domain_resolver=FakeDomainResolver()
+    )
+    service._access_token = "token"
+
+    monkeypatch.setattr(
+        "src.services.snov_service.requests.post",
+        lambda *args, **kwargs: DummyResponse({"task_hash": "task-2"}),
+    )
+    monkeypatch.setattr(
+        "src.services.snov_service.requests.get",
+        lambda url, **kwargs: DummyResponse(
+            {
+                "status": "completed",
+                "data": [{"email": "talent@acme.com", "position": "Talent Acquisition"}],
+            }
+        ),
+    )
+
+    lead = service.find_recruiter_for_company("Acme Corp")
+
+    assert lead.email == "talent@acme.com"

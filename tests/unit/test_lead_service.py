@@ -82,11 +82,15 @@ def test_lead_service_google_then_hunter_email_finder(logger: logging.Logger) ->
 def test_lead_service_uses_snov_without_hunter(
     monkeypatch: pytest.MonkeyPatch, logger: logging.Logger
 ) -> None:
-    def fake_snov_post(url: str, data: dict | None = None, timeout: int = 30) -> DummyResponse:
+    def fake_snov_post(url: str, data: dict | None = None, timeout: int = 30, **kwargs) -> DummyResponse:
         if url.endswith("access_token"):
             return DummyResponse({"access_token": "token"})
+        return DummyResponse({"task_hash": "task-1", "result": "https://api.snov.io/result/task-1"})
+
+    def fake_snov_get(url: str, **kwargs) -> DummyResponse:
         return DummyResponse(
             {
+                "status": "completed",
                 "data": [
                     {
                         "email": "recruiter@acme.com",
@@ -96,9 +100,10 @@ def test_lead_service_uses_snov_without_hunter(
                     }
                 ]
             }
-        )
+    )
 
     monkeypatch.setattr("src.services.snov_service.requests.post", fake_snov_post)
+    monkeypatch.setattr("src.services.snov_service.requests.get", fake_snov_get)
 
     resolver = FakeDomainResolver()
     lead = LeadService(
@@ -117,9 +122,9 @@ def test_lead_service_uses_snov_without_hunter(
 def test_lead_service_falls_back_to_hunter_when_snov_returns_empty(
     monkeypatch: pytest.MonkeyPatch, logger: logging.Logger
 ) -> None:
-    monkeypatch.setattr(
-        "src.services.hunter_service.requests.get",
-        lambda *args, **kwargs: DummyResponse(
+    def fake_get(url: str, **kwargs) -> DummyResponse:
+        if "hunter.io" in url:
+            return DummyResponse(
             {
                 "data": {
                     "emails": [
@@ -132,15 +137,16 @@ def test_lead_service_falls_back_to_hunter_when_snov_returns_empty(
                     ]
                 }
             }
-        ),
-    )
+            )
+        return DummyResponse({"status": "completed", "data": []})
 
-    def fake_snov_post(url: str, data: dict | None = None, timeout: int = 30) -> DummyResponse:
+    def fake_snov_post(url: str, data: dict | None = None, timeout: int = 30, **kwargs) -> DummyResponse:
         if url.endswith("access_token"):
             return DummyResponse({"access_token": "token"})
-        return DummyResponse({"data": []})
+        return DummyResponse({"task_hash": "task-1", "result": "https://api.snov.io/result/task-1"})
 
     monkeypatch.setattr("src.services.snov_service.requests.post", fake_snov_post)
+    monkeypatch.setattr("src.services.snov_service.requests.get", fake_get)
 
     resolver = FakeDomainResolver()
     lead = LeadService(
