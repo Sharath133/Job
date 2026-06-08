@@ -3,7 +3,7 @@ name: Autonomous Job Agent
 on:
   workflow_dispatch:
   schedule:
-    - cron: "0 * * * *"
+    - cron: "11 * * * *"
 
 jobs:
   run-agent:
