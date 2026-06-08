@@ -55,6 +55,8 @@ def test_lead_service_uses_snov_before_hunter(logger: logging.Logger) -> None:
     lead = LeadService(hunter, snov, None, None, logger).find_recruiter_for_company("Acme")
     assert lead.email == "jane@acme.com"
     assert lead.lead_source == "snov"
+    assert lead.snov_email == "jane@acme.com"
+    assert lead.hunter_email == ""
 
 
 def test_lead_service_google_then_hunter_email_finder(logger: logging.Logger) -> None:
@@ -77,6 +79,7 @@ def test_lead_service_google_then_hunter_email_finder(logger: logging.Logger) ->
 
     lead = LeadService(hunter, None, google, None, logger).find_recruiter_for_job(_job())
     assert lead.email == "jane@acme.com"
+    assert lead.hunter_email == "jane@acme.com"
 
 
 def test_lead_service_uses_snov_without_hunter(
@@ -176,3 +179,4 @@ def test_lead_service_uses_public_contact_before_hunter(logger: logging.Logger) 
 
     assert lead.email == "careers@acme.com"
     assert lead.lead_source == "public_contact"
+    assert lead.public_contact_email == "careers@acme.com"

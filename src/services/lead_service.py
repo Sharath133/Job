@@ -58,6 +58,7 @@ class LeadService:
             self._logger.warning("Public contact search failed for %s: %s", company_name, exc)
             return RecruiterLead()
         if lead.email:
+            lead = self._tag_public_lead(lead)
             self._logger.info("Found recruiter via public contact search for %s: %s", company_name, lead.email)
         return lead
 
@@ -130,6 +131,7 @@ class LeadService:
         try:
             snov_lead = self._snov.find_recruiter_for_company(company_name)
             if snov_lead.email:
+                snov_lead.snov_email = snov_lead.email
                 snov_lead.lead_source = "snov"
                 self._logger.info("Snov found recruiter for %s", company_name)
                 return snov_lead
@@ -142,4 +144,14 @@ class LeadService:
         if lead.email:
             lead.hunter_email = lead.email
             lead.lead_source = source
+        return lead
+
+    @staticmethod
+    def _tag_public_lead(lead: RecruiterLead) -> RecruiterLead:
+        if not lead.email:
+            return lead
+        if lead.lead_source == "job_description":
+            lead.job_post_email = lead.email
+        elif lead.lead_source == "public_contact":
+            lead.public_contact_email = lead.email
         return lead

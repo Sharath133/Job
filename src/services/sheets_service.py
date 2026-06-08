@@ -48,6 +48,9 @@ SHEET_COLUMNS = [
     "reply_status",
     "thread_id",
     "message_id",
+    "job_post_email",
+    "public_contact_email",
+    "snov_email",
 ]
 
 

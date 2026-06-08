@@ -44,6 +44,9 @@ class RecruiterLead:
     name: str = ""
     email: str = ""
     title: str = ""
+    job_post_email: str = ""
+    public_contact_email: str = ""
+    snov_email: str = ""
     hunter_email: str = ""
     lead_source: str = ""
 
@@ -92,6 +95,10 @@ class JobExecutionContext:
 
     def to_sheet_row(self) -> list[str]:
         email_subject = self.email_draft.subject if self.email_draft else ""
+
+        def source_email(value: str) -> str:
+            return value or "none"
+
         return [
             self.timestamp,
             self.job.job_id,
@@ -106,7 +113,7 @@ class JobExecutionContext:
             self.recruiter.name,
             self.recruiter.title,
             self.recruiter.email,
-            self.recruiter.hunter_email,
+            source_email(self.recruiter.hunter_email),
             self.recruiter.lead_source,
             email_subject,
             self.outcome.email_status,
@@ -123,6 +130,9 @@ class JobExecutionContext:
             self.reply_status,
             self.thread_id,
             self.message_id,
+            source_email(self.recruiter.job_post_email),
+            source_email(self.recruiter.public_contact_email),
+            source_email(self.recruiter.snov_email),
         ]
 
 
