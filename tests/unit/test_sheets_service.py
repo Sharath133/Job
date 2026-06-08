@@ -122,6 +122,7 @@ def test_append_result_updates_first_empty_schema_row(monkeypatch) -> None:
 
     assert worksheet.updates[-1][0] == f"A3:{_column_letter(len(SHEET_COLUMNS))}3"
     assert worksheet.updates[-1][1][0][1] == "new-job"
+    assert worksheet.updates[-1][1][0][0].endswith("+05:30")
 
 
 def test_followup_rows_and_updates(monkeypatch) -> None:

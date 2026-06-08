@@ -1,10 +1,11 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime
 
 import gspread
 
 from src.models import EmailSendResult, FollowupRow, JobExecutionContext
+from src.utils.time_utils import local_now, parse_sheet_datetime
 
 
 def _column_letter(column_count: int) -> str:
@@ -81,7 +82,7 @@ class SheetsService:
 
     def get_recent_sent_recipients(self, days: int = 14) -> set[str]:
         records = self._get_records()
-        now = datetime.now(timezone.utc)
+        now = local_now()
         recipients: set[str] = set()
         for row in records:
             if str(row.get("email_status", "")) != "sent":
@@ -91,10 +92,10 @@ class SheetsService:
             if not email or not timestamp:
                 continue
             try:
-                sent_at = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
-                if sent_at.tzinfo is None:
-                    sent_at = sent_at.replace(tzinfo=timezone.utc)
+                sent_at = self._parse_datetime(timestamp)
             except ValueError:
+                continue
+            if not sent_at:
                 continue
             if (now - sent_at).days <= days:
                 recipients.add(email)
@@ -102,7 +103,7 @@ class SheetsService:
 
     def count_emails_sent_today(self) -> int:
         records = self._get_records()
-        today = datetime.now(timezone.utc).date()
+        today = local_now().date()
         count = 0
         for row in records:
             timestamp = str(row.get("timestamp", ""))
@@ -110,7 +111,10 @@ class SheetsService:
             if email_status != "sent" or not timestamp:
                 continue
             try:
-                row_day = datetime.fromisoformat(timestamp.replace("Z", "+00:00")).date()
+                parsed = self._parse_datetime(timestamp)
+                if not parsed:
+                    continue
+                row_day = parsed.astimezone(local_now().tzinfo).date()
                 if row_day == today:
                     count += 1
             except ValueError:
@@ -126,7 +130,7 @@ class SheetsService:
         )
 
     def get_due_followups(self, max_followups: int, now: datetime | None = None) -> list[FollowupRow]:
-        now = now or datetime.now(timezone.utc)
+        now = now or local_now()
         due_rows: list[FollowupRow] = []
         for index, row in enumerate(self._get_records(), start=2):
             if str(row.get("email_status", "")) != "sent":
@@ -170,11 +174,12 @@ class SheetsService:
         return due_rows
 
     def count_followups_sent_today(self) -> int:
-        today = datetime.now(timezone.utc).date()
+        now = local_now()
+        today = now.date()
         count = 0
         for row in self._get_records():
             sent_at = self._parse_datetime(row.get("last_followup_sent_at"))
-            if sent_at and sent_at.date() == today:
+            if sent_at and sent_at.astimezone(now.tzinfo).date() == today:
                 count += 1
         return count
 
@@ -232,16 +237,7 @@ class SheetsService:
 
     @staticmethod
     def _parse_datetime(value: object) -> datetime | None:
-        raw_value = str(value or "").strip()
-        if not raw_value:
-            return None
-        try:
-            parsed = datetime.fromisoformat(raw_value.replace("Z", "+00:00"))
-        except ValueError:
-            return None
-        if parsed.tzinfo is None:
-            return parsed.replace(tzinfo=timezone.utc)
-        return parsed
+        return parse_sheet_datetime(value)
 
     @staticmethod
     def _as_int(value: object) -> int:

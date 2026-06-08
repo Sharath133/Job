@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime
 from enum import Enum
 from typing import Any
+
+from src.utils.time_utils import sheet_now_iso
 
 
 class JobState(str, Enum):
@@ -86,7 +87,7 @@ class JobExecutionContext:
     reply_status: str = "unknown"
     thread_id: str = ""
     message_id: str = ""
-    timestamp: str = field(default_factory=lambda: datetime.utcnow().isoformat())
+    timestamp: str = field(default_factory=sheet_now_iso)
     metadata: dict[str, Any] = field(default_factory=dict)
 
     def to_sheet_row(self) -> list[str]:

@@ -25,6 +25,7 @@ from src.services.sheets_service import SheetsService
 from src.state_machine import StateMachine
 from src.utils.logging_utils import get_logger
 from src.utils.subject_utils import subject_for_job
+from src.utils.time_utils import parse_sheet_datetime, sheet_now_iso
 from src.utils.validators import Validators
 
 RESUME_SUMMARY = (
@@ -324,7 +325,7 @@ class JobAgentOrchestrator:
             return
 
         try:
-            sent_at = self._utc_now()
+            sent_at = self._sheet_now()
             sender = getattr(self, "_gmail", None) or self._email
             result = sender.send_email(context.recruiter.email, context.email_draft, settings.resume_path)
             if result is None:
@@ -366,7 +367,7 @@ class JobAgentOrchestrator:
                     continue
 
                 result = gmail.send_followup(followup)
-                sent_at = self._utc_now()
+                sent_at = self._sheet_now()
                 next_count = followup.followup_count + 1
                 next_due_at = self._next_followup_due_at(
                     followup.initial_email_sent_at or followup.timestamp,
@@ -411,18 +412,12 @@ class JobAgentOrchestrator:
             context.outcome.failure_reason += f"Playwright failure: {exc}"
 
     @staticmethod
-    def _utc_now() -> str:
-        return datetime.now(timezone.utc).isoformat()
+    def _sheet_now() -> str:
+        return sheet_now_iso()
 
     @staticmethod
     def _parse_datetime(value: str) -> datetime:
-        try:
-            parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
-        except ValueError:
-            return datetime.now(timezone.utc)
-        if parsed.tzinfo is None:
-            return parsed.replace(tzinfo=timezone.utc)
-        return parsed
+        return parse_sheet_datetime(value) or datetime.now(timezone.utc)
 
     def _next_followup_due_at(self, initial_sent_at: str, followup_count: int) -> str:
         if followup_count >= settings.followup_max_count:
