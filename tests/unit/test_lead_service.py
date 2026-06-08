@@ -52,7 +52,7 @@ def test_lead_service_uses_snov_before_hunter(logger: logging.Logger) -> None:
         name="Jane", email="jane@acme.com", title="Recruiter"
     )
 
-    lead = LeadService(hunter, snov, None, None, logger).find_recruiter_for_company("Acme")
+    lead = LeadService(hunter, snov, None, None, None, logger).find_recruiter_for_company("Acme")
     assert lead.email == "jane@acme.com"
     assert lead.lead_source == "snov"
     assert lead.snov_email == "jane@acme.com"
@@ -77,7 +77,7 @@ def test_lead_service_google_then_hunter_email_finder(logger: logging.Logger) ->
     )
     hunter.find_recruiter_for_company = lambda company: RecruiterLead()  # type: ignore[method-assign]
 
-    lead = LeadService(hunter, None, google, None, logger).find_recruiter_for_job(_job())
+    lead = LeadService(hunter, None, None, google, None, logger).find_recruiter_for_job(_job())
     assert lead.email == "jane@acme.com"
     assert lead.hunter_email == "jane@acme.com"
 
@@ -114,6 +114,7 @@ def test_lead_service_uses_snov_without_hunter(
         SnovService(
             client_id="id", client_secret="secret", max_searches_per_run=3, domain_resolver=resolver
         ),
+        None,
         None,
         None,
         logger,
@@ -159,6 +160,7 @@ def test_lead_service_falls_back_to_hunter_when_snov_returns_empty(
         ),
         None,
         None,
+        None,
         logger,
     ).find_recruiter_for_company("Acme Corp")
     assert lead.email == "hr@acme.com"
@@ -175,8 +177,42 @@ def test_lead_service_uses_public_contact_before_hunter(logger: logging.Logger) 
         AssertionError("Hunter should not run when public contact found")
     )
 
-    lead = LeadService(hunter, None, None, PublicContacts(), logger).find_recruiter_for_job(_job())
+    lead = LeadService(hunter, None, None, None, PublicContacts(), logger).find_recruiter_for_job(_job())
 
     assert lead.email == "careers@acme.com"
     assert lead.lead_source == "public_contact"
     assert lead.public_contact_email == "careers@acme.com"
+
+
+def test_lead_service_uses_contactout_before_hunter(logger: logging.Logger) -> None:
+    class ContactOut:
+        def find_email_for_candidate(self, candidate: RecruiterCandidate) -> RecruiterLead:
+            return RecruiterLead(
+                name=candidate.name,
+                email="contactout@acme.com",
+                title=candidate.title,
+                contactout_email="contactout@acme.com",
+                lead_source="contactout",
+            )
+
+    hunter = HunterService(api_key="x", max_searches_per_run=5, domain_resolver=FakeDomainResolver())
+    google = GoogleSearchService("key", "cx", max_searches_per_run=3)
+
+    google.find_recruiter_candidates = lambda company, max_results=5: [  # type: ignore[method-assign]
+        RecruiterCandidate(
+            name="Jane Doe",
+            first_name="Jane",
+            last_name="Doe",
+            title="Technical Recruiter",
+            linkedin_url="https://www.linkedin.com/in/jane-doe",
+        )
+    ]
+    hunter.find_email_for_person = lambda company, first, last: (_ for _ in ()).throw(  # type: ignore[method-assign]
+        AssertionError("Hunter should not run when ContactOut found an email")
+    )
+
+    lead = LeadService(hunter, None, ContactOut(), google, None, logger).find_recruiter_for_job(_job())
+
+    assert lead.email == "contactout@acme.com"
+    assert lead.contactout_email == "contactout@acme.com"
+    assert lead.lead_source == "contactout"

@@ -11,6 +11,10 @@ _RECRUITER_KEYWORDS = (
     "hr",
     "human resources",
     "hiring",
+    "hiring manager",
+    "engineering manager",
+    "software engineering manager",
+    "technical recruiter",
     "people operations",
     "talent acquisition",
 )
@@ -29,7 +33,15 @@ class RecruiterCandidate:
 
 
 def build_recruiter_search_query(company_name: str) -> str:
-    return f'site:linkedin.com/in "{company_name}" recruiter OR talent OR '
+    roles = (
+        '"Talent Acquisition"',
+        "Recruiter",
+        '"Technical Recruiter"',
+        '"Hiring Manager"',
+        '"Engineering Manager"',
+        '"Software Engineering Manager"',
+    )
+    return f'site:linkedin.com/in ({" OR ".join(roles)}) "{company_name}" India'
 
 
 def _looks_like_recruiter_role(text: str) -> bool:

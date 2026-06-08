@@ -80,6 +80,11 @@ jobs:
           SNOV_CLIENT_ID: ${{ secrets.SNOV_CLIENT_ID }}
           SNOV_CLIENT_SECRET: ${{ secrets.SNOV_CLIENT_SECRET }}
           SNOV_SEARCH_LIMIT_PER_RUN: 10
+          CONTACTOUT_API_TOKEN: ${{ secrets.CONTACTOUT_API_TOKEN }}
+          CONTACTOUT_SEARCH_LIMIT_PER_RUN: 10
+          GOOGLE_CSE_API_KEY: ${{ secrets.GOOGLE_CSE_API_KEY }}
+          GOOGLE_CSE_CX: ${{ secrets.GOOGLE_CSE_CX }}
+          GOOGLE_SEARCH_LIMIT_PER_RUN: 10
           HUNTER_API_KEY: ${{ secrets.HUNTER_API_KEY }}
           PUBLIC_CONTACT_ENABLED: true
           PUBLIC_CONTACT_MAX_PAGES: 5

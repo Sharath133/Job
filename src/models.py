@@ -47,6 +47,7 @@ class RecruiterLead:
     job_post_email: str = ""
     public_contact_email: str = ""
     snov_email: str = ""
+    contactout_email: str = ""
     hunter_email: str = ""
     lead_source: str = ""
 
@@ -133,6 +134,7 @@ class JobExecutionContext:
             source_email(self.recruiter.job_post_email),
             source_email(self.recruiter.public_contact_email),
             source_email(self.recruiter.snov_email),
+            source_email(self.recruiter.contactout_email),
         ]
 
 

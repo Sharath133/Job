@@ -51,6 +51,7 @@ SHEET_COLUMNS = [
     "job_post_email",
     "public_contact_email",
     "snov_email",
+    "contactout_email",
 ]
 
 

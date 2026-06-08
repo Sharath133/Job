@@ -3,10 +3,12 @@ from __future__ import annotations
 import logging
 
 from src.models import JobRecord, RecruiterLead
+from src.services.contactout_service import ContactOutService
 from src.services.google_search_service import GoogleSearchService
 from src.services.hunter_service import HunterService
 from src.services.public_contact_service import PublicContactService
 from src.services.snov_service import SnovService
+from src.utils.linkedin_search_utils import RecruiterCandidate
 
 
 class LeadService:
@@ -14,20 +16,23 @@ class LeadService:
     Recruiter sourcing workflow:
     1. Public job/company pages
     2. Snov.io domain search
-    3. Google LinkedIn recruiter search -> Hunter email finder (by name)
-    4. Hunter domain search (HR department)
+    3. Google LinkedIn recruiter search -> ContactOut profile email lookup
+    4. Google LinkedIn recruiter search -> Hunter email finder (by name)
+    5. Hunter domain search (HR department)
     """
 
     def __init__(
         self,
         hunter: HunterService | None,
         snov: SnovService | None,
+        contactout: ContactOutService | None,
         google_search: GoogleSearchService | None,
         public_contacts: PublicContactService | None,
         logger: logging.Logger,
     ) -> None:
         self._hunter = hunter
         self._snov = snov
+        self._contactout = contactout
         self._google_search = google_search
         self._public_contacts = public_contacts
         self._logger = logger
@@ -43,7 +48,7 @@ class LeadService:
         if lead.email:
             return lead
 
-        lead = self._try_google_and_hunter_email_finder(company_name)
+        lead = self._try_google_profile_enrichment(company_name)
         if lead.email:
             return lead
 
@@ -75,14 +80,58 @@ class LeadService:
             )
         )
 
-    def _try_google_and_hunter_email_finder(self, company_name: str) -> RecruiterLead:
-        if not self._google_search or not self._hunter:
+    def _try_google_profile_enrichment(self, company_name: str) -> RecruiterLead:
+        if not self._google_search or not (self._contactout or self._hunter):
             return RecruiterLead()
 
         try:
             candidates = self._google_search.find_recruiter_candidates(company_name)
         except Exception as exc:  # noqa: BLE001
             self._logger.warning("Google recruiter search failed for %s: %s", company_name, exc)
+            return RecruiterLead()
+
+        lead = self._try_contactout_candidates(company_name, candidates)
+        if lead.email:
+            return lead
+
+        return self._try_hunter_email_finder_candidates(company_name, candidates)
+
+    def _try_contactout_candidates(
+        self,
+        company_name: str,
+        candidates: list[RecruiterCandidate],
+    ) -> RecruiterLead:
+        if not self._contactout:
+            return RecruiterLead()
+
+        for candidate in candidates:
+            try:
+                lead = self._contactout.find_email_for_candidate(candidate)
+            except Exception as exc:  # noqa: BLE001
+                self._logger.warning(
+                    "ContactOut email finder failed for %s at %s: %s",
+                    candidate.name,
+                    company_name,
+                    exc,
+                )
+                continue
+
+            if lead.email:
+                self._logger.info(
+                    "Found recruiter via ContactOut for %s: %s",
+                    company_name,
+                    lead.email,
+                )
+                return lead
+
+        return RecruiterLead()
+
+    def _try_hunter_email_finder_candidates(
+        self,
+        company_name: str,
+        candidates: list[RecruiterCandidate],
+    ) -> RecruiterLead:
+        if not self._hunter:
             return RecruiterLead()
 
         for candidate in candidates:

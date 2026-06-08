@@ -7,7 +7,7 @@ Python 3.11 state-machine pipeline that discovers jobs, filters duplicates, scor
 1. Ingests latest jobs from Apify and JobSpy.
 2. Deduplicates by `job_id` using Google Sheets.
 3. Scores role fit via Groq (`llama-3.1-8b-instant`).
-4. Enriches recruiter leads using Hunter.
+4. Enriches recruiter leads using public pages, Snov, ContactOut, and Hunter.
 5. Drafts and sends personalized email via SMTP.
 6. Submits applications via Playwright for Lever/Greenhouse.
 7. Skips Workday and stores screenshot for manual review.
@@ -45,7 +45,8 @@ Minimum required:
 - `APIFY_ACTOR_ID`
 - JobSpy runs without a token by default.
 - `GROQ_API_KEY`
-- `HUNTER_API_KEY`
+- `SNOV_CLIENT_ID` / `SNOV_CLIENT_SECRET` or `HUNTER_API_KEY`
+- `CONTACTOUT_API_TOKEN` plus Google CSE secrets if using ContactOut profile enrichment
 - `GMAIL_SENDER_EMAIL`
 - `GMAIL_APP_PASSWORD`
 - `GOOGLE_SHEET_ID`
@@ -88,6 +89,11 @@ Configure these repository secrets:
 - `APIFY_ACTOR_ID`
 - JobSpy settings are configured directly in `.github/workflows/job-agent.yml`.
 - `GROQ_API_KEY`
+- `SNOV_CLIENT_ID`
+- `SNOV_CLIENT_SECRET`
+- `CONTACTOUT_API_TOKEN`
+- `GOOGLE_CSE_API_KEY`
+- `GOOGLE_CSE_CX`
 - `HUNTER_API_KEY`
 - `GMAIL_SENDER_EMAIL`
 - `GMAIL_APP_PASSWORD`

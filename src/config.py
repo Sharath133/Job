@@ -37,6 +37,7 @@ class Settings(BaseSettings):
     hunter_api_key: str = Field(default="", alias="HUNTER_API_KEY")
     snov_client_id: str = Field(default="", alias="SNOV_CLIENT_ID")
     snov_client_secret: str = Field(default="", alias="SNOV_CLIENT_SECRET")
+    contactout_api_token: str = Field(default="", alias="CONTACTOUT_API_TOKEN")
     google_cse_api_key: str = Field(default="", alias="GOOGLE_CSE_API_KEY")
     google_cse_cx: str = Field(default="", alias="GOOGLE_CSE_CX")
     public_contact_enabled: bool = Field(default=True, alias="PUBLIC_CONTACT_ENABLED")
@@ -77,6 +78,7 @@ class Settings(BaseSettings):
     daily_email_limit: int = 25
     hunter_search_limit_per_run: int = Field(default=3, alias="HUNTER_SEARCH_LIMIT_PER_RUN")
     snov_search_limit_per_run: int = Field(default=3, alias="SNOV_SEARCH_LIMIT_PER_RUN")
+    contactout_search_limit_per_run: int = Field(default=3, alias="CONTACTOUT_SEARCH_LIMIT_PER_RUN")
     google_search_limit_per_run: int = Field(default=3, alias="GOOGLE_SEARCH_LIMIT_PER_RUN")
 
     score_threshold: int = 4
@@ -84,6 +86,10 @@ class Settings(BaseSettings):
     @property
     def snov_enabled(self) -> bool:
         return bool(self.snov_client_id.strip() and self.snov_client_secret.strip())
+
+    @property
+    def contactout_enabled(self) -> bool:
+        return bool(self.contactout_api_token.strip())
 
     @property
     def google_search_enabled(self) -> bool:

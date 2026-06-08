@@ -9,6 +9,7 @@ from src.config import settings
 from src.models import EmailDraft, EmailSendResult, ExecutionOutcome, JobExecutionContext, JobRecord, JobState
 from src.services.apify_client import ApifyJobClient
 from src.services.company_domain_service import CompanyDomainService
+from src.services.contactout_service import ContactOutService
 from src.services.google_search_service import GoogleSearchService
 from src.services.gmail_service import GmailService
 from src.services.groq_service import GroqRateLimitError
@@ -81,6 +82,14 @@ class JobAgentOrchestrator:
             if settings.google_search_enabled
             else None
         )
+        contactout = (
+            ContactOutService(
+                settings.contactout_api_token,
+                settings.contactout_search_limit_per_run,
+            )
+            if settings.contactout_enabled
+            else None
+        )
         public_contacts = (
             PublicContactService(domain_resolver, settings.public_contact_max_pages)
             if settings.public_contact_enabled
@@ -98,6 +107,7 @@ class JobAgentOrchestrator:
         self._lead = LeadService(
             hunter,
             snov,
+            contactout,
             google_search,
             public_contacts,
             self._logger,
